@@ -96,6 +96,7 @@ export function BeamPanel(props: Props) {
 
       <div className="readout-group">
         {row(t('beam.luminosity'), props.luminosityCm2S === null ? '—' : `${scientific(props.luminosityCm2S)} ${t('unit.cm2s')}`)}
+        <Hint textKey="hint.luminosity.what" href={SOURCES.protons} />
         {row(
           t('beam.collisionRate'),
           props.collisionRatePerS === null ? '—' : `${scientific(props.collisionRatePerS)} ${t('unit.perSecond')}`,

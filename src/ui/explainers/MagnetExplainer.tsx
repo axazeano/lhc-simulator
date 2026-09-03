@@ -2,6 +2,7 @@ import { LHC } from '../../data/lhc';
 import { useI18n } from '../../i18n/I18nProvider';
 import { LHC_MACHINE_CONFIG, momentumFromEnergy, readouts, requiredFieldT, type MachineState } from '../../physics/accelerator';
 import { ExplainerSection, Live } from './Explainer';
+import { Formula } from './Formula';
 
 interface Props {
   machine: MachineState;
@@ -23,19 +24,33 @@ export function MagnetExplainer({ machine }: Props) {
 
       <ExplainerSection title={t('explainer.magnets.bend.title')} text={t('explainer.magnets.bend.text', { dipoles: number(LHC.dipoleCount), radius: number(LHC.bendingRadiusM, { maximumFractionDigits: 0 }) })}>
         <Bending fieldFraction={Math.min(1.1, actual / requiredFieldT(config.maxEnergyGeV, config))} />
+        <Formula
+          formula="p = 0.2998 · B · ρ"
+          symbols={[
+            { symbol: 'p', meaning: t('sym.p'), value: `${number(momentumFromEnergy(energy), { maximumFractionDigits: 0 })} ${t('unit.GeVc')}` },
+            { symbol: 'B', meaning: t('sym.B'), value: tesla(required) },
+            { symbol: 'ρ', meaning: t('sym.rho'), value: `${number(LHC.bendingRadiusM, { maximumFractionDigits: 0 })} ${t('unit.m')}` },
+            { symbol: '0.2998', meaning: t('sym.const') },
+          ]}
+        />
         <div className="live-row">
           <Live label={t('readout.energy')} value={`${number(energy, { maximumFractionDigits: 0 })} ${t('unit.GeV')}`} />
-          <Live label={t('readout.momentum')} value={`${number(momentumFromEnergy(energy), { maximumFractionDigits: 0 })} ${t('unit.GeVc')}`} />
-          <Live label={t('readout.requiredField')} value={tesla(required)} />
         </div>
       </ExplainerSection>
 
       <ExplainerSection title={t('explainer.magnets.orbit.title')} text={t('explainer.magnets.orbit.text', { dispersion: number(config.dispersionM, { maximumFractionDigits: 1 }), aperture: number(config.apertureHalfWidthM * 1000, { maximumFractionDigits: 0 }) })}>
         <Pipe offsetM={offsetM} apertureM={config.apertureHalfWidthM} />
+        <Formula
+          formula="Δx = D · Δp / p"
+          symbols={[
+            { symbol: 'Δx', meaning: t('sym.dx'), value: r ? `${number(offsetM * 1000, { maximumFractionDigits: 1, signDisplay: 'always' })} ${t('unit.mm')}` : '—' },
+            { symbol: 'D', meaning: t('sym.D'), value: `${number(config.dispersionM, { maximumFractionDigits: 1 })} ${t('unit.m')}` },
+            { symbol: 'Δp / p', meaning: t('sym.dpp'), value: r ? `${number(-r.fieldMismatch * 100, { maximumFractionDigits: 2, signDisplay: 'always' })} %` : '—' },
+          ]}
+        />
         <div className="live-row">
           <Live label={t('readout.actualField')} value={tesla(actual)} />
-          <Live label={t('readout.mismatch')} value={r ? `${number(r.fieldMismatch * 100, { maximumFractionDigits: 2, signDisplay: 'always' })} %` : '—'} />
-          <Live label={t('readout.orbitOffset')} value={r ? `${number(offsetM * 1000, { maximumFractionDigits: 1, signDisplay: 'always' })} ${t('unit.mm')}` : '—'} />
+          <Live label={t('readout.requiredField')} value={tesla(required)} />
         </div>
       </ExplainerSection>
     </div>

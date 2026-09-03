@@ -11,6 +11,7 @@ import {
 } from '../../physics/accelerator';
 import { crossSectionNb, processById } from '../../physics/collision';
 import { ExplainerSection, Live } from './Explainer';
+import { Formula } from './Formula';
 
 interface Props {
   beam: BeamParameters;
@@ -58,9 +59,15 @@ export function BeamExplainer({ beam, energyGeV }: Props) {
 
       <ExplainerSection title={t('explainer.beam.focus.title')} text={t('explainer.beam.focus.text')}>
         <Hourglass betaStar={beam.betaStarM} designBetaStar={LHC_DESIGN_BEAM.betaStarM} />
+        <Formula
+          formula="σ = √(ε · β*)"
+          symbols={[
+            { symbol: 'σ', meaning: t('sym.sigma'), value: `${um(sigma)} ${t('unit.um')}` },
+            { symbol: 'ε', meaning: t('sym.eps'), value: `${number(emittance * 1e9, { maximumFractionDigits: 2 })} нм·рад`.replace('нм·рад', t('unit.nmrad')) },
+            { symbol: 'β*', meaning: t('sym.betastar'), value: `${number(beam.betaStarM, { maximumFractionDigits: 2 })} ${t('unit.m')}` },
+          ]}
+        />
         <div className="live-row">
-          <Live label="β*" value={`${number(beam.betaStarM, { maximumFractionDigits: 2 })} ${t('unit.m')}`} />
-          <Live label={t('explainer.beam.focus.sigma')} value={`${um(sigma)} ${t('unit.um')}`} />
           <Live label={t('explainer.beam.focus.sigmaDesign')} value={`${um(sigmaDesign)} ${t('unit.um')}`} />
         </div>
       </ExplainerSection>
@@ -70,18 +77,37 @@ export function BeamExplainer({ beam, energyGeV }: Props) {
           <Live label={t('readout.energy')} value={`${number(energyGeV, { maximumFractionDigits: 0 })} ${t('unit.GeV')}`} />
           <Live label={t('explainer.beam.luminosity.perSecond')} value={`${scientific(inelasticNb * 1e-33 * luminosity, 1)} ${t('unit.perSecond')}`} />
         </div>
-        <LuminosityFormula
-          bunches={number(beam.bunches)}
-          protons={scientific(beam.protonsPerBunch, 2)}
-          sigma={`${um(sigma)} ${t('unit.um')}`}
-          result={`${scientific(luminosity)} ${t('unit.cm2s')}`}
-          frev={number(LHC.revolutionFrequencyHz, { maximumFractionDigits: 0 })}
-          labels={{
-            bunches: t('beam.bunches'),
-            protons: t('beam.protonsPerBunch'),
-            sigma: t('explainer.beam.focus.sigma'),
-            frev: t('explainer.beam.luminosity.frev'),
-          }}
+        <Formula
+          formula={
+            <>
+              <span>L =</span>
+              <span className="frac">
+                <span className="num">
+                  <span className="term term-n">N²</span> · <span className="term term-nb">n_b</span> ·{' '}
+                  <span className="term term-f">f_rev</span>
+                </span>
+                <span className="den">
+                  4π · <span className="term term-s">σ²</span>
+                </span>
+              </span>
+            </>
+          }
+          symbols={[
+            { symbol: 'L', meaning: t('sym.L'), value: `${scientific(luminosity)} ${t('unit.cm2s')}` },
+            { symbol: 'N', meaning: t('sym.N'), value: scientific(beam.protonsPerBunch, 2) },
+            { symbol: 'n_b', meaning: t('sym.nb'), value: number(beam.bunches) },
+            { symbol: 'f_rev', meaning: t('sym.frev'), value: `${number(LHC.revolutionFrequencyHz, { maximumFractionDigits: 0 })} Hz` },
+            { symbol: 'σ', meaning: t('sym.sigma'), value: `${um(sigma)} ${t('unit.um')}` },
+            { symbol: '4π', meaning: t('sym.4pi') },
+          ]}
+        />
+        <Formula
+          formula={t('formula.events')}
+          symbols={[
+            { symbol: t('sym.Nev.symbol'), meaning: t('sym.Nev') },
+            { symbol: t('sym.sigmaX.symbol'), meaning: t('sym.sigmaX') },
+            { symbol: 'L · t', meaning: t('sym.intL') },
+          ]}
         />
       </ExplainerSection>
     </div>
@@ -198,39 +224,5 @@ function Hourglass({ betaStar, designBetaStar }: { betaStar: number; designBetaS
         - - - {designBetaStar.toFixed(2)} m
       </text>
     </svg>
-  );
-}
-
-function LuminosityFormula(props: {
-  bunches: string;
-  protons: string;
-  sigma: string;
-  frev: string;
-  result: string;
-  labels: { bunches: string; protons: string; sigma: string; frev: string };
-}) {
-  return (
-    <div className="formula">
-      <div className="formula-line mono">
-        <span>L =</span>
-        <span className="frac">
-          <span className="num">
-            <span className="term term-n" title={props.labels.protons}>N²</span> ·{' '}
-            <span className="term term-nb" title={props.labels.bunches}>n_b</span> ·{' '}
-            <span className="term term-f" title={props.labels.frev}>f_rev</span>
-          </span>
-          <span className="den">
-            4π · <span className="term term-s" title={props.labels.sigma}>σ²</span>
-          </span>
-        </span>
-      </div>
-      <div className="formula-values">
-        <span className="term term-n">N = {props.protons}</span>
-        <span className="term term-nb">n_b = {props.bunches}</span>
-        <span className="term term-f">f_rev = {props.frev} Hz</span>
-        <span className="term term-s">σ = {props.sigma}</span>
-      </div>
-      <div className="formula-result mono">L = {props.result}</div>
-    </div>
   );
 }

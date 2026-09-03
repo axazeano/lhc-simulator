@@ -1,6 +1,7 @@
 import { useI18n } from '../../i18n/I18nProvider';
 import type { Channel } from '../../physics/collision/channels';
 import { ExplainerSection } from './Explainer';
+import { Formula } from './Formula';
 
 interface Props {
   channel: Channel;
@@ -17,9 +18,14 @@ export function MassExplainer({ channel }: Props) {
       </ExplainerSection>
 
       <ExplainerSection title={t('explainer.mass.formula.title')} text={t('explainer.mass.formula.text')}>
-        <div className="formula">
-          <div className="formula-line mono">m² = (E₁ + E₂)² − |p₁ + p₂|²</div>
-        </div>
+        <Formula
+          formula="m² = (E₁ + E₂)² − |p₁ + p₂|²"
+          symbols={[
+            { symbol: 'm', meaning: t('sym.m') },
+            { symbol: 'E₁, E₂', meaning: t('sym.E1E2') },
+            { symbol: 'p₁, p₂', meaning: t('sym.p1p2') },
+          ]}
+        />
       </ExplainerSection>
 
       <ExplainerSection title={t('explainer.mass.peak.title')} text={t('explainer.mass.peak.text')}>

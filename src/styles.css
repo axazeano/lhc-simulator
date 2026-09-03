@@ -925,3 +925,39 @@ dialog.explainer::backdrop {
 .term-nb { color: var(--ok); }
 .term-f { color: var(--ink-2); }
 .term-s { color: var(--peak); }
+
+/* Formula with legend */
+.formula-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+
+.legend {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 14px;
+  font-size: 13.5px;
+}
+
+.legend-row {
+  display: contents;
+}
+
+.legend dt {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.legend dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+.legend-value {
+  margin-left: 8px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
