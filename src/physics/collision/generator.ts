@@ -232,3 +232,22 @@ export function generateWeightedEvent(
 export function parentOf(event: GeneratedEvent): FourVector {
   return event.daughters.reduce((sum, d) => add(sum, d), { e: 0, px: 0, py: 0, pz: 0 });
 }
+
+/**
+ * A hypothetical resonance of any mass and width decaying to a channel's final state. Used to
+ * estimate acceptance and mass resolution for a candidate peak without knowing what it is.
+ */
+export function generateHypotheticalResonance(
+  finalState: NonNullable<ProcessDefinition['finalState']>,
+  massGeV: number,
+  widthGeV: number,
+  sqrtSGeV: number,
+  rng: Random,
+): GeneratedEvent {
+  const process: ProcessDefinition = { id: 'hypothetical', kind: 'resonance', finalState, crossSectionNb: [], source: '' };
+  const lo = Math.max(massGeV - BREIT_WIGNER_REACH * widthGeV, 2 * MUON_MASS + 1e-6);
+  const mass = widthGeV > 0 ? rng.breitWignerTruncated(massGeV, widthGeV, lo, massGeV + BREIT_WIGNER_REACH * widthGeV) : massGeV;
+  const parent = sampleParent(mass, sqrtSGeV, rng);
+  const { daughters, kinds, charges } = decayToFinalState(process, parent, mass, rng);
+  return { processId: process.id, massGeV: mass, daughters, kinds, charges };
+}

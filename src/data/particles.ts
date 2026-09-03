@@ -1,8 +1,16 @@
 import raw from './particles.json';
 
+export interface Decay {
+  channel: string;
+  fraction: number;
+}
+
 export interface ParticleData {
   massGeV: number;
   widthGeV: number;
+  charge: number;
+  spin: number;
+  decays: Decay[];
   source: string;
 }
 

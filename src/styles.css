@@ -1113,6 +1113,7 @@ dialog.explainer::backdrop {
   grid-template-areas:
     'selection plot'
     'selection fit'
+    'passport passport'
     'events events';
   gap: 16px;
   align-items: start;
@@ -1125,6 +1126,7 @@ dialog.explainer::backdrop {
       'selection'
       'plot'
       'fit'
+      'passport'
       'events';
   }
 }
@@ -1331,4 +1333,88 @@ dialog.explainer::backdrop {
 
 .event-table tr.selected td {
   background: var(--accent-soft);
+}
+
+/* Particle passport */
+.passport-panel { grid-area: passport; }
+
+.passport-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13.5px;
+}
+
+.passport-table th,
+.passport-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.passport-table th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--surface-2);
+}
+
+.passport-table td.n,
+.passport-table th.n {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.passport-table td.dim {
+  color: var(--ink-2);
+  max-width: 34ch;
+}
+
+.passport-table td.ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.passport-table td.bad {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.catalog-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.catalog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+}
+
+.catalog-chip .dim {
+  color: var(--ink-2);
+}
+
+.chip-remove {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1;
 }

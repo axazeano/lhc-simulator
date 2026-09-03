@@ -338,7 +338,16 @@ export function App() {
         </div>
       </header>
 
-      {screen === 'analysis' && <AnalysisScreen run={run} runVersion={runVersion} channel={channel} onChannel={onChannel} onExplain={setExplainer} />}
+      {screen === 'analysis' && (
+        <AnalysisScreen
+          run={run}
+          runVersion={runVersion}
+          channel={channel}
+          onChannel={onChannel}
+          onExplain={setExplainer}
+          sqrtSGeV={machine.status === 'empty' ? 13000 : centerOfMassEnergyCollider(machine.energyGeV)}
+        />
+      )}
 
       {screen === 'console' && (
       <TutorialPanel

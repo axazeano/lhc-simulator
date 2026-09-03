@@ -14,6 +14,7 @@ import { EventTable } from './EventTable';
 import { FitPanel } from './FitPanel';
 import { PlotCanvas } from './PlotCanvas';
 import { SelectionEditor } from './SelectionEditor';
+import { PassportPanel } from './PassportPanel';
 
 interface Props {
   run: CollisionRun;
@@ -21,6 +22,8 @@ interface Props {
   channel: Channel;
   onChannel(channel: Channel): void;
   onExplain(topic: ExplainerTopic): void;
+  /** √s the data is being taken at, for acceptance simulation and cross-section tables. */
+  sqrtSGeV: number;
 }
 
 const STORAGE_KEY = 'lhc-simulator.selections';
@@ -61,7 +64,7 @@ function downloadCsv(name: string, rows: string[][]): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain }: Props) {
+export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain, sqrtSGeV }: Props) {
   const { t, number, scientific } = useI18n();
   const definition = CHANNEL_DEFINITIONS[channel];
   const store = run.stores[channel];
@@ -285,6 +288,16 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain 
         </section>
 
         <FitPanel enabled={variable === 'mass'} range={fitRange} guess={guess} result={fit} onRange={setFitRange} onGuess={setGuess} onFit={runFit} />
+
+        <PassportPanel
+          store={store}
+          runVersion={runVersion}
+          channel={channel}
+          selection={active}
+          fit={variable === 'mass' ? fit : null}
+          integratedLuminosityM2={run.integratedLuminosityM2}
+          sqrtSGeV={sqrtSGeV}
+        />
 
         <EventTable store={store} version={runVersion} mask={mask} selected={selectedEvent} onSelect={setSelectedEvent} />
 
