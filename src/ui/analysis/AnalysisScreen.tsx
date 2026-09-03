@@ -7,6 +7,8 @@ import { VARIABLES, defaultBins, defaultRange, type Variable } from '../../physi
 import { CHANNELS, CHANNEL_DEFINITIONS, type Channel } from '../../physics/collision/channels';
 import type { CollisionRun } from '../../physics/collision/run';
 import { Hint } from '../Hint';
+import { EventDisplay } from '../EventDisplay';
+import { ExplainerButton, type ExplainerTopic } from '../explainers/Explainer';
 import { integratedLuminosityDisplay } from '../units';
 import { EventTable } from './EventTable';
 import { FitPanel } from './FitPanel';
@@ -18,6 +20,7 @@ interface Props {
   runVersion: number;
   channel: Channel;
   onChannel(channel: Channel): void;
+  onExplain(topic: ExplainerTopic): void;
 }
 
 const STORAGE_KEY = 'lhc-simulator.selections';
@@ -58,7 +61,7 @@ function downloadCsv(name: string, rows: string[][]): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function AnalysisScreen({ run, runVersion, channel, onChannel }: Props) {
+export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain }: Props) {
   const { t, number, scientific } = useI18n();
   const definition = CHANNEL_DEFINITIONS[channel];
   const store = run.stores[channel];
@@ -77,6 +80,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel }: Props) {
   const [fitRange, setFitRange] = useState({ min: 80, max: 100 });
   const [guess, setGuess] = useState({ mean: 91, sigma: 2 });
   const [fit, setFit] = useState<PeakFit | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -202,6 +206,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel }: Props) {
             </span>
           </div>
           <div className="button-row">
+            <ExplainerButton topic="detector" onOpen={onExplain} labelKey="explainer.detector.button" />
             <span className="eyebrow">{t('analysisScreen.export')}</span>
             <button type="button" onClick={exportEvents}>
               {t('analysisScreen.exportEvents')}
@@ -281,7 +286,23 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel }: Props) {
 
         <FitPanel enabled={variable === 'mass'} range={fitRange} guess={guess} result={fit} onRange={setFitRange} onGuess={setGuess} onFit={runFit} />
 
-        <EventTable store={store} version={runVersion} mask={mask} />
+        <EventTable store={store} version={runVersion} mask={mask} selected={selectedEvent} onSelect={setSelectedEvent} />
+
+        {selectedEvent !== null && selectedEvent < store.size && (
+          <section className="panel event-panel" aria-labelledby="event-panel-title">
+            <div className="panel-head">
+              <h2 id="event-panel-title">{t('display.title')}</h2>
+              <button type="button" onClick={() => setSelectedEvent(null)}>
+                {t('explainer.close')}
+              </button>
+            </div>
+            <EventDisplay
+              particles={store.get(selectedEvent).particles}
+              massGeV={store.get(selectedEvent).massGeV}
+              sqrtSGeV={store.get(selectedEvent).sqrtSGeV}
+            />
+          </section>
+        )}
       </div>
     </div>
   );

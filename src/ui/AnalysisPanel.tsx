@@ -79,7 +79,10 @@ export function AnalysisPanel(props: Props) {
     <section className="panel analysis" aria-labelledby="analysis-title">
       <div className="panel-head">
         <h2 id="analysis-title">{t('analysis.titleChannel', { channel: t(`channel.${channel}`) })}</h2>
-        <ExplainerButton topic="mass" onOpen={props.onExplain} />
+        <span className="button-row">
+          <ExplainerButton topic="detector" onOpen={props.onExplain} labelKey="explainer.detector.button" />
+          <ExplainerButton topic="mass" onOpen={props.onExplain} />
+        </span>
       </div>
 
       <div className={`knob-head ${access.channel ? '' : 'locked'}`} title={access.channel ? undefined : lockTitle}>

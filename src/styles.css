@@ -1263,3 +1263,72 @@ dialog.explainer::backdrop {
   flex-direction: column;
   gap: 2px;
 }
+
+/* Event display */
+.event-display {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.event-views {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .event-views {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.event-view {
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.particle-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.particle-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+}
+
+.particle-list .dim {
+  color: var(--ink-2);
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.event-panel {
+  grid-column: 1 / -1;
+}
+
+.event-table tr.clickable {
+  cursor: pointer;
+}
+
+.event-table tr.clickable:hover td {
+  background: var(--surface-2);
+}
+
+.event-table tr.selected td {
+  background: var(--accent-soft);
+}

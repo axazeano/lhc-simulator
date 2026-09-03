@@ -37,6 +37,7 @@ import { isMuted, play, setMuted } from './ui/sound';
 import { BeamExplainer } from './ui/explainers/BeamExplainer';
 import { MagnetExplainer } from './ui/explainers/MagnetExplainer';
 import { MassExplainer } from './ui/explainers/MassExplainer';
+import { DetectorExplainer } from './ui/explainers/DetectorExplainer';
 
 /** Collisions happen whenever a beam is circulating and not being ramped. */
 function isColliding(machine: MachineState): boolean {
@@ -74,7 +75,9 @@ export function App() {
   const [logScale, setLogScale] = useState(true);
   const [showKnownMasses, setShowKnownMasses] = useState(false);
   const [runVersion, setRunVersion] = useState(0);
-  const [screen, setScreen] = useState<'console' | 'analysis'>('console');
+  const [screen, setScreen] = useState<'console' | 'analysis'>(() =>
+    new URLSearchParams(window.location.search).get('screen') === 'analysis' ? 'analysis' : 'console',
+  );
   // `?explain=beam|magnets|mass` opens an explainer on load, handy for linking and screenshots.
   const [explainer, setExplainer] = useState<ExplainerTopic | null>(() => {
     const requested = new URLSearchParams(window.location.search).get('explain');
@@ -100,8 +103,14 @@ export function App() {
   const runRef = useRef<CollisionRun | null>(null);
   runRef.current ??= new CollisionRun(Date.now() >>> 0);
   const run = runRef.current;
-  // Expose the run for debugging in development builds only.
-  if (import.meta.env.DEV) (window as unknown as { __lhcRun?: CollisionRun }).__lhcRun = run;
+  // Expose the run for debugging in development builds only; `?demo` pre-fills it with 200 nb⁻¹ at 13 TeV.
+  if (import.meta.env.DEV) {
+    (window as unknown as { __lhcRun?: CollisionRun }).__lhcRun = run;
+    if (run.stores.mumu.size === 0 && new URLSearchParams(window.location.search).has('demo')) {
+      run.fill = 1;
+      run.collect(2e39, 13000);
+    }
+  }
   if (run.fill === 1 && machine.status === 'empty' && run.stores.mumu.size === 0) run.fill = 0;
 
   const update = useCallback((fn: (state: MachineState) => MachineState) => {
@@ -329,7 +338,7 @@ export function App() {
         </div>
       </header>
 
-      {screen === 'analysis' && <AnalysisScreen run={run} runVersion={runVersion} channel={channel} onChannel={onChannel} />}
+      {screen === 'analysis' && <AnalysisScreen run={run} runVersion={runVersion} channel={channel} onChannel={onChannel} onExplain={setExplainer} />}
 
       {screen === 'console' && (
       <TutorialPanel
@@ -428,6 +437,7 @@ export function App() {
           )}
           {explainer === 'magnets' && <MagnetExplainer machine={machine} />}
           {explainer === 'mass' && <MassExplainer channel={channel} />}
+          {explainer === 'detector' && <DetectorExplainer store={run.stores[channel]} version={runVersion} />}
           {explainer === 'glossary' && <GlossaryExplainer />}
         </ExplainerDialog>
       )}

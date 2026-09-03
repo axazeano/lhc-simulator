@@ -7,12 +7,14 @@ interface Props {
   version: number;
   /** Mask of records passing the active selection. */
   mask: Uint8Array;
+  selected: number | null;
+  onSelect(index: number): void;
 }
 
 const PAGE = 25;
 type Sort = 'newest' | 'massDesc' | 'massAsc';
 
-export function EventTable({ store, version, mask }: Props) {
+export function EventTable({ store, version, mask, selected, onSelect }: Props) {
   const { t, number } = useI18n();
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<Sort>('newest');
@@ -30,7 +32,8 @@ export function EventTable({ store, version, mask }: Props) {
 
   const pages = Math.max(1, Math.ceil(order.length / PAGE));
   const current = Math.min(page, pages - 1);
-  const rows = order.slice(current * PAGE, current * PAGE + PAGE).map((i) => store.get(i));
+  const indices = order.slice(current * PAGE, current * PAGE + PAGE);
+  const rows = indices.map((i) => store.get(i));
 
   return (
     <section className="panel event-table" aria-labelledby="events-title">
@@ -61,7 +64,12 @@ export function EventTable({ store, version, mask }: Props) {
           </thead>
           <tbody>
             {rows.map((r, k) => (
-              <tr key={`${current}-${k}`}>
+              <tr
+                key={`${current}-${k}`}
+                className={`clickable ${indices[k] === selected ? 'selected' : ''}`}
+                onClick={() => onSelect(indices[k]!)}
+                title={t('events.open')}
+              >
                 <td className="n">{number(r.massGeV, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 <td className="n">{number(r.weight, { maximumFractionDigits: 1 })}</td>
                 <td className="n">#{r.fill}</td>
@@ -90,7 +98,7 @@ export function EventTable({ store, version, mask }: Props) {
           {t('events.next')}
         </button>
       </div>
-      <p className="note">{t('events.weightNote')}</p>
+      <p className="note">{t('events.weightNote')} {t('events.clickNote')}</p>
     </section>
   );
 }

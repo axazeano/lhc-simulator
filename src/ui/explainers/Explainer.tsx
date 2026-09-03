@@ -1,9 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
 
-export type ExplainerTopic = 'beam' | 'magnets' | 'mass' | 'glossary';
+export type ExplainerTopic = 'beam' | 'magnets' | 'mass' | 'detector' | 'glossary';
 
-export const EXPLAINER_TOPICS: readonly ExplainerTopic[] = ['beam', 'magnets', 'mass', 'glossary'];
+export const EXPLAINER_TOPICS: readonly ExplainerTopic[] = ['beam', 'magnets', 'mass', 'detector', 'glossary'];
 
 export function isExplainerTopic(value: unknown): value is ExplainerTopic {
   return typeof value === 'string' && (EXPLAINER_TOPICS as readonly string[]).includes(value);
@@ -60,13 +60,15 @@ export function ExplainerDialog({ topic, onClose, children }: DialogProps) {
 interface ButtonProps {
   topic: ExplainerTopic;
   onOpen(topic: ExplainerTopic): void;
+  /** Override the button label key; defaults to "How it works". */
+  labelKey?: string;
 }
 
-export function ExplainerButton({ topic, onOpen }: ButtonProps) {
+export function ExplainerButton({ topic, onOpen, labelKey }: ButtonProps) {
   const { t } = useI18n();
   return (
     <button type="button" className="explain-button" onClick={() => onOpen(topic)}>
-      {t('explainer.open')}
+      {t(labelKey ?? 'explainer.open')}
     </button>
   );
 }
