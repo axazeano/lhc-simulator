@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Histogram } from './histogram';
-import { analyseWindow, interpolateBackground } from './window';
+import { analyseWindow, backgroundCurve, interpolateBackground } from './window';
 
 describe('mass window analysis', () => {
   it('estimates a flat background and the signal as the excess', () => {
@@ -60,5 +60,25 @@ describe('mass window analysis', () => {
     h.addCounts(50, 9);
     const result = analyseWindow(h, { minGeV: 49, maxGeV: 52 });
     expect(result.significance).toBe(9);
+  });
+});
+
+describe('backgroundCurve', () => {
+  it('integrates to the fitted background of the window analysis', () => {
+    const h = new Histogram({ min: 50, max: 150, bins: 400 });
+    // A smooth exponential background with plenty of events, no peak.
+    for (let i = 0; i < 400; i++) {
+      const m = 50 + (i + 0.5) * 0.25;
+      h.fill(m, 1000 * Math.exp(-(m - 50) / 40));
+    }
+    const window = { minGeV: 86, maxGeV: 96 };
+    const curve = backgroundCurve(h, window);
+    expect(curve).not.toBeNull();
+    let integral = 0;
+    for (let m = 86.125; m < 96; m += 0.25) integral += curve!(m);
+    const analysis = analyseWindow(h, window);
+    expect(analysis.method).toBe('fit');
+    expect(integral).toBeCloseTo(analysis.background, -1);
+    expect(Math.abs(integral - analysis.background) / analysis.background).toBeLessThan(0.02);
   });
 });

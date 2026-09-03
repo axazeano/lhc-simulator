@@ -1783,3 +1783,82 @@ dialog.explainer::backdrop {
     grid-column: 2;
   }
 }
+
+/* Worked example of a selection and the noise explainer */
+.walkthrough {
+  border-color: var(--accent);
+}
+
+.walk-text {
+  margin: 0;
+  max-width: 80ch;
+  line-height: 1.5;
+}
+
+.walk-table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.walk-table th,
+.walk-table td {
+  padding: 4px 14px 4px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.walk-table th {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.walk-table .n {
+  text-align: right;
+}
+
+.walk-table .ok {
+  color: var(--ok);
+}
+
+.walk-table .warn {
+  color: var(--warn);
+}
+
+.guide-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.guide-action {
+  align-self: flex-start;
+  font-size: 12.5px;
+  padding: 4px 10px;
+}
+
+.noise-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.noise-controls > label:first-child {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.noise-controls input[type='range'] {
+  width: 100%;
+}
+
+.explainer-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  max-width: 70ch;
+}

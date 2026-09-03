@@ -17,6 +17,8 @@ interface Props {
   onChange(selection: Selection): void;
   onAdd(): void;
   onDelete(id: string): void;
+  /** Start the worked example of a selection. */
+  onExample?(): void;
 }
 
 function numberOrNull(raw: string): number | null {
@@ -35,7 +37,14 @@ export function SelectionEditor(props: Props) {
     <section className="panel selection-editor" aria-labelledby="selection-title">
       <div className="panel-head">
         <h2 id="selection-title">{t('selection.title')}</h2>
-        <Hint textKey="hint.selection.what" href="https://en.wikipedia.org/wiki/Event_selection" />
+        <span className="button-row">
+          {props.onExample && (
+            <button type="button" className="explain-button" onClick={props.onExample}>
+              {t('walk.button')}
+            </button>
+          )}
+          <Hint textKey="hint.selection.what" href="https://en.wikipedia.org/wiki/Event_selection" />
+        </span>
       </div>
 
       <div className="selection-list">

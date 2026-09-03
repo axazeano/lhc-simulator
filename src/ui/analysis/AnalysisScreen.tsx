@@ -16,7 +16,9 @@ import { PlotCanvas } from './PlotCanvas';
 import { SelectionEditor } from './SelectionEditor';
 import { PassportPanel } from './PassportPanel';
 import { ResearchGuide, type GuideStep } from './ResearchGuide';
-import { analyseWindow } from '../../physics/analysis/window';
+import { analyseWindow, backgroundCurve, sidebandsOf } from '../../physics/analysis/window';
+import type { PlotAnnotations } from './PlotCanvas';
+import { SelectionWalkthrough, WALK_BINS, WALK_EXAMPLE_ID, WALK_BASELINE_ID, WALK_RANGE, WALK_STEPS, WALK_WINDOW, walkSelections, type WalkStep } from './SelectionWalkthrough';
 import type { CatalogEntry } from './catalog';
 import type { HiddenParticle } from '../../physics/collision/hidden';
 
@@ -96,6 +98,11 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
   const [fit, setFit] = useState<PeakFit | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
   const [passportProgress, setPassportProgress] = useState({ response: false, compared: false });
+  // `?walk=<step>` opens the worked example at a step, for linking and screenshots.
+  const [walk, setWalk] = useState<WalkStep | null>(() => {
+    const requested = new URLSearchParams(window.location.search).get('walk');
+    return (WALK_STEPS as readonly string[]).includes(requested ?? '') ? (requested as WalkStep) : null;
+  });
 
   useEffect(() => {
     try {
@@ -117,7 +124,11 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
   const active = list.find((s) => s.id === activeId)!;
   const overlay = overlayId ? list.find((s) => s.id === overlayId) ?? null : null;
 
-  const spec = useMemo(() => ({ min: range.min, max: range.max, bins: Math.max(10, Math.min(2000, Math.round(bins))) }), [range, bins]);
+  const spec = useMemo(() => {
+    const min = variable === 'mass' ? Math.max(definition.spec.min, range.min) : range.min;
+    const max = Math.max(min + 1e-6, range.max);
+    return { min, max, bins: Math.max(10, Math.min(2000, Math.round(bins))) };
+  }, [range, bins, variable, definition.spec.min]);
   const built = useMemo(() => buildHistogram(store, active, variable, spec), [store, runVersion, active, variable, spec]);
   const builtOverlay = useMemo(() => (overlay ? buildHistogram(store, overlay, variable, spec) : null), [store, runVersion, overlay, variable, spec]);
   const mask = useMemo(() => applySelection(store, active).mask, [store, runVersion, active]);
@@ -142,6 +153,52 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
     setSelections((s) => ({ ...s, [channel]: s[channel].filter((x) => x.id !== id) }));
     if (overlayId === id) setOverlayId(null);
   };
+
+  // Worked example: each step rewrites the two example selections and points the plot at the Z.
+  const startWalk = () => {
+    if (channel !== 'mumu') onChannel('mumu');
+    setWalk('data');
+  };
+  useEffect(() => {
+    if (walk === null) return;
+    const { baseline, example } = walkSelections(walk, t('walk.baseName'), t('walk.exampleName'));
+    setSelections((s) => {
+      const rest = s.mumu.filter((x) => x.id !== WALK_BASELINE_ID && x.id !== WALK_EXAMPLE_ID);
+      return { ...s, mumu: [...rest, baseline, example] };
+    });
+    setActiveByChannel((a) => ({ ...a, mumu: WALK_EXAMPLE_ID }));
+    setOverlayId(WALK_STEPS.indexOf(walk) >= WALK_STEPS.indexOf('charge') ? WALK_BASELINE_ID : null);
+    setVariable('mass');
+    setRange(WALK_RANGE);
+    setBins(WALK_BINS);
+    setLogScale(false);
+    setFit(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walk]);
+  const walkStats = useMemo(() => {
+    if (walk === null) return null;
+    const mumu = run.stores.mumu;
+    const { baseline, example } = walkSelections(walk, '', '');
+    const full = { min: mumu.spec.min, max: mumu.spec.max, bins: mumu.spec.bins };
+    return {
+      baseline: analyseWindow(buildHistogram(mumu, baseline, 'mass', full).histogram, WALK_WINDOW),
+      example: analyseWindow(buildHistogram(mumu, example, 'mass', full).histogram, WALK_WINDOW),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walk, run, runVersion]);
+  const annotations: PlotAnnotations | null = useMemo(() => {
+    if (walk === null || variable !== 'mass' || channel !== 'mumu') return null;
+    const [left, right] = sidebandsOf(built.histogram, WALK_WINDOW);
+    return {
+      bands: [
+        { min: left.minGeV, max: left.maxGeV, kind: 'sideband', label: t('walk.band.sideband') },
+        { min: WALK_WINDOW.minGeV, max: WALK_WINDOW.maxGeV, kind: 'window', label: t('walk.band.window') },
+        { min: right.minGeV, max: right.maxGeV, kind: 'sideband', label: t('walk.band.sideband') },
+      ],
+      background: WALK_STEPS.indexOf(walk) >= WALK_STEPS.indexOf('look') ? backgroundCurve(built.histogram, WALK_WINDOW) : null,
+      noise: walk === 'noise',
+    };
+  }, [walk, variable, channel, built, t]);
 
   const runFit = useCallback(() => {
     if (variable !== 'mass') return;
@@ -208,7 +265,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
   const guideSteps: GuideStep[] = [
     { id: 'record', done: store.size > 0, target: '.analysis-head' },
     { id: 'look', done: store.size > 0 && (fit !== null || variable === 'mass'), target: '.plot-panel' },
-    { id: 'select', done: (windowReadout?.significance ?? 0) >= 3, target: '.selection-editor' },
+    { id: 'select', done: (windowReadout?.significance ?? 0) >= 3, target: '.selection-editor', action: { label: t('walk.start'), onClick: startWalk } },
     { id: 'fit', done: fit !== null && fit.converged, target: '.fit-panel' },
     { id: 'response', done: fit !== null && passportProgress.response, target: '.passport-panel' },
     { id: 'compare', done: fit !== null && passportProgress.compared, target: '.passport-panel' },
@@ -281,6 +338,10 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
 
       <ResearchGuide steps={guideSteps} />
 
+      {walk !== null && walkStats && (
+        <SelectionWalkthrough step={walk} baseline={walkStats.baseline} example={walkStats.example} onStep={setWalk} onClose={() => setWalk(null)} onExplain={onExplain} />
+      )}
+
       <div className="analysis-grid">
         <SelectionEditor
           selections={list}
@@ -296,12 +357,16 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
           onChange={updateSelection}
           onAdd={addSelection}
           onDelete={deleteSelection}
+          onExample={startWalk}
         />
 
         <section className="panel plot-panel" aria-labelledby="plot-title">
           <div className="panel-head">
             <h2 id="plot-title">{t('plot.title')}</h2>
-            <Hint textKey="hint.plot.what" href="https://en.wikipedia.org/wiki/Histogram" />
+            <span className="button-row">
+              <ExplainerButton topic="noise" onOpen={onExplain} labelKey="explainer.noise.button" />
+              <Hint textKey="hint.plot.what" href="https://en.wikipedia.org/wiki/Histogram" />
+            </span>
           </div>
           <div className="plot-controls">
             <label>
@@ -317,7 +382,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
             <label>
               <span>{t('plot.range')}</span>
               <span className="window-inputs">
-                <input type="number" step="any" value={range.min} onChange={(e) => setRange({ ...range, min: Number(e.target.value) })} />
+                <input type="number" step="any" min={variable === 'mass' ? definition.spec.min : undefined} value={range.min} onChange={(e) => setRange({ ...range, min: Number(e.target.value) })} />
                 <span>–</span>
                 <input type="number" step="any" value={range.max} onChange={(e) => setRange({ ...range, max: Number(e.target.value) })} />
               </span>
@@ -341,6 +406,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
             xLabel={t(`variable.${variable}`)}
             curve={curve}
             shade={fit && variable === 'mass' ? fit.range : null}
+            annotations={annotations}
           />
           <div className="readout">
             <span className="readout-label">{t('plot.entries')}</span>

@@ -82,9 +82,7 @@ function fitQuadratic(xs: number[], ys: number[], ws: number[]): [number, number
 
 export function analyseWindow(histogram: Histogram, window: MassWindow): WindowAnalysis {
   const width = window.maxGeV - window.minGeV;
-  const { spec } = histogram;
-  const left: MassWindow = { minGeV: Math.max(spec.min, window.minGeV - SIDEBAND_WIDTHS * width), maxGeV: window.minGeV };
-  const right: MassWindow = { minGeV: window.maxGeV, maxGeV: Math.min(spec.max, window.maxGeV + SIDEBAND_WIDTHS * width) };
+  const [left, right] = sidebandsOf(histogram, window);
   const observed = histogram.integral(window.minGeV, window.maxGeV);
   const sidebandTotal = histogram.integral(left.minGeV, left.maxGeV) + histogram.integral(right.minGeV, right.maxGeV);
 
@@ -106,8 +104,30 @@ export function analyseWindow(histogram: Histogram, window: MassWindow): WindowA
   return { window, sidebands: [left, right], observed, background, signal, significance, method };
 }
 
-/** Fit ln(counts) on the sideband bins with a quadratic and integrate it over the window. */
-function fitBackground(histogram: Histogram, window: MassWindow, left: MassWindow, right: MassWindow): number | null {
+/** The sidebands used for a window: two window widths on each side, clipped to the histogram. */
+export function sidebandsOf(histogram: Histogram, window: MassWindow): [MassWindow, MassWindow] {
+  const width = window.maxGeV - window.minGeV;
+  const { spec } = histogram;
+  return [
+    { minGeV: Math.max(spec.min, window.minGeV - SIDEBAND_WIDTHS * width), maxGeV: window.minGeV },
+    { minGeV: window.maxGeV, maxGeV: Math.min(spec.max, window.maxGeV + SIDEBAND_WIDTHS * width) },
+  ];
+}
+
+/**
+ * The smooth background fitted to the sidebands, as counts per histogram bin at mass m,
+ * for drawing under the data. Null when the sidebands are too sparse for the fit.
+ */
+export function backgroundCurve(histogram: Histogram, window: MassWindow): ((m: number) => number) | null {
+  const [left, right] = sidebandsOf(histogram, window);
+  const total = histogram.integral(left.minGeV, left.maxGeV) + histogram.integral(right.minGeV, right.maxGeV);
+  if (total < MIN_EVENTS_FOR_FIT) return null;
+  const density = fitSidebands(histogram, window, left, right);
+  return density ? (m) => density(m) * histogram.width : null;
+}
+
+/** Fit ln(density) on the sideband slices with a quadratic; returns the density in events per GeV. */
+function fitSidebands(histogram: Histogram, window: MassWindow, left: MassWindow, right: MassWindow): ((m: number) => number) | null {
   const centre = (window.minGeV + window.maxGeV) / 2;
   const scale = window.maxGeV - window.minGeV;
   // Group bins into slices of about a tenth of the window so that every point has counts.
@@ -131,14 +151,19 @@ function fitBackground(histogram: Histogram, window: MassWindow, left: MassWindo
   const fit = fitQuadratic(xs, ys, ws);
   if (!fit) return null;
   const [a, b, c] = fit;
-  // Integrate the fitted density over the window numerically.
+  return (m: number) => {
+    const x = (m - centre) / scale;
+    return Math.exp(a + b * x + c * x * x);
+  };
+}
+
+/** Integrate the fitted sideband density over the window; null when the fit is impossible. */
+function fitBackground(histogram: Histogram, window: MassWindow, left: MassWindow, right: MassWindow): number | null {
+  const density = fitSidebands(histogram, window, left, right);
+  if (!density) return null;
   const steps = 200;
   const h = (window.maxGeV - window.minGeV) / steps;
   let total = 0;
-  for (let i = 0; i < steps; i++) {
-    const m = window.minGeV + (i + 0.5) * h;
-    const x = (m - centre) / scale;
-    total += Math.exp(a + b * x + c * x * x) * h;
-  }
+  for (let i = 0; i < steps; i++) total += density(window.minGeV + (i + 0.5) * h) * h;
   return Number.isFinite(total) ? total : null;
 }

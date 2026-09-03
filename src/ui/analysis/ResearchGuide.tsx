@@ -7,6 +7,8 @@ export interface GuideStep {
   done: boolean;
   /** CSS selector of the panel the step lives in, to scroll to. */
   target: string;
+  /** Optional extra action shown on the card, e.g. a worked example. */
+  action?: { label: string; onClick(): void };
 }
 
 interface Props {
@@ -34,6 +36,11 @@ export function ResearchGuide({ steps }: Props) {
                 <span className="guide-why">{t(`guide.${s.id}.why`)}</span>
               </span>
             </button>
+            {s.action && (
+              <button type="button" className="guide-action" onClick={s.action.onClick}>
+                {s.action.label}
+              </button>
+            )}
           </li>
         ))}
       </ol>

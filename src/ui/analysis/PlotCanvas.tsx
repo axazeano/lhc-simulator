@@ -9,6 +9,15 @@ export interface PlotSeries {
   color: string;
 }
 
+export interface PlotAnnotations {
+  /** Shaded x-ranges with a label: the search window and its sidebands. */
+  bands?: { min: number; max: number; kind: 'window' | 'sideband'; label: string }[];
+  /** Smooth background in counts per histogram bin, drawn dashed under the data. */
+  background?: ((x: number) => number) | null;
+  /** Draw the ±√N noise band around the background. */
+  noise?: boolean;
+}
+
 interface Props {
   series: PlotSeries[];
   range: { min: number; max: number };
@@ -18,6 +27,7 @@ interface Props {
   curve?: ((x: number) => number) | null;
   /** Optional shaded x-range (e.g. the fit range). */
   shade?: { min: number; max: number } | null;
+  annotations?: PlotAnnotations | null;
 }
 
 const MARGIN = { left: 60, right: 16, top: 26, bottom: 36 };
@@ -81,6 +91,15 @@ export function PlotCanvas(props: Props) {
         if (Number.isFinite(y) && y > maxCount) maxCount = y;
       }
     }
+    const perColumnOf = (h: Histogram) => (range.max - range.min) / columnCount / h.width;
+    if (props.annotations?.background && first) {
+      const perColumn = perColumnOf(first.histogram);
+      for (let i = 0; i < columnCount; i++) {
+        const x = range.min + ((i + 0.5) * (range.max - range.min)) / columnCount;
+        const y = props.annotations.background(x) * perColumn;
+        if (Number.isFinite(y) && y > maxCount) maxCount = y;
+      }
+    }
     const xOf = (x: number) => MARGIN.left + ((x - range.min) / (range.max - range.min)) * plotW;
     const yOf = (count: number) => {
       const f = logScale ? Math.log10(1 + Math.max(0, count)) / Math.log10(1 + maxCount) : Math.max(0, count) / maxCount;
@@ -90,6 +109,22 @@ export function PlotCanvas(props: Props) {
     if (props.shade) {
       ctx.fillStyle = surface2;
       ctx.fillRect(xOf(props.shade.min), MARGIN.top, xOf(props.shade.max) - xOf(props.shade.min), plotH);
+    }
+    const accent = cssVar(canvas, '--accent', '#2456B8');
+    for (const band of props.annotations?.bands ?? []) {
+      const x0 = Math.max(MARGIN.left, xOf(band.min));
+      const x1 = Math.min(MARGIN.left + plotW, xOf(band.max));
+      if (x1 <= x0) continue;
+      ctx.save();
+      ctx.globalAlpha = band.kind === 'window' ? 0.16 : 0.5;
+      ctx.fillStyle = band.kind === 'window' ? accent : surface2;
+      ctx.fillRect(x0, MARGIN.top, x1 - x0, plotH);
+      ctx.restore();
+      ctx.font = '600 11px "IBM Plex Sans", system-ui, sans-serif';
+      ctx.fillStyle = band.kind === 'window' ? accent : ink2;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(band.label, (x0 + x1) / 2, MARGIN.top + 18);
     }
 
     ctx.strokeStyle = line;
@@ -111,7 +146,7 @@ export function PlotCanvas(props: Props) {
       ctx.moveTo(x, MARGIN.top + plotH);
       ctx.lineTo(x, MARGIN.top + plotH + 4);
       ctx.stroke();
-      ctx.fillText(number(Math.round(m * 1000) / 1000), x, MARGIN.top + plotH + 7);
+      ctx.fillText(number(Math.round(m * 1000) / 1000 + 0), x, MARGIN.top + plotH + 7);
     }
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
@@ -158,6 +193,59 @@ export function PlotCanvas(props: Props) {
       ctx.textBaseline = 'top';
       ctx.fillText(s.label, MARGIN.left + 6 + index * 180, 6);
     });
+
+    if (props.annotations?.background && first) {
+      const perColumn = perColumnOf(first.histogram);
+      const values: number[] = [];
+      for (let i = 0; i < columnCount; i++) {
+        const x = range.min + ((i + 0.5) * (range.max - range.min)) / columnCount;
+        const v = props.annotations.background(x) * perColumn;
+        values.push(Number.isFinite(v) ? Math.max(0, v) : NaN);
+      }
+      if (props.annotations.noise) {
+        // ±√N around the background: what pure statistics can do to a column.
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.fillStyle = peak;
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < columnCount; i++) {
+          const v = values[i]!;
+          if (Number.isNaN(v)) continue;
+          const px = MARGIN.left + (i + 0.5) * colW;
+          if (!started) ctx.moveTo(px, yOf(v + Math.sqrt(v)));
+          else ctx.lineTo(px, yOf(v + Math.sqrt(v)));
+          started = true;
+        }
+        for (let i = columnCount - 1; i >= 0; i--) {
+          const v = values[i]!;
+          if (Number.isNaN(v)) continue;
+          ctx.lineTo(MARGIN.left + (i + 0.5) * colW, yOf(Math.max(0, v - Math.sqrt(v))));
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.strokeStyle = ink;
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let pen = false;
+      for (let i = 0; i < columnCount; i++) {
+        const v = values[i]!;
+        if (Number.isNaN(v)) {
+          pen = false;
+          continue;
+        }
+        const px = MARGIN.left + (i + 0.5) * colW;
+        if (!pen) ctx.moveTo(px, yOf(v));
+        else ctx.lineTo(px, yOf(v));
+        pen = true;
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
 
     if (props.curve && first) {
       const perColumn = (range.max - range.min) / columnCount / first.histogram.width;

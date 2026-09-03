@@ -58,6 +58,7 @@ import { BeamExplainer } from './ui/explainers/BeamExplainer';
 import { MagnetExplainer } from './ui/explainers/MagnetExplainer';
 import { MassExplainer } from './ui/explainers/MassExplainer';
 import { DetectorExplainer } from './ui/explainers/DetectorExplainer';
+import { NoiseExplainer } from './ui/explainers/NoiseExplainer';
 
 /** Collisions happen whenever a beam is circulating and not being ramped. */
 function isColliding(machine: MachineState): boolean {
@@ -233,13 +234,16 @@ export function App() {
         .map((e) => ({ label: e.matchedId ? PARTICLE_LABELS[e.matchedId] ?? e.matchedId : e.name, mass: e.massGeV, channel: e.channel })),
     [catalog],
   );
-  // Expose the run for debugging in development builds only; `?demo` pre-fills it with 200 nb⁻¹ at 13 TeV.
+  // Expose the run for debugging in development builds only; `?demo` pre-fills it at 13 TeV.
   if (import.meta.env.DEV) {
     (window as unknown as { __lhcRun?: CollisionRun; __lhcHidden?: unknown }).__lhcRun = run;
     (window as unknown as { __lhcHidden?: unknown }).__lhcHidden = hidden;
-    if (run.stores.mumu.size === 0 && new URLSearchParams(window.location.search).has('demo')) {
+    const demo = new URLSearchParams(window.location.search).get('demo');
+    if (run.stores.mumu.size === 0 && demo !== null) {
+      // `?demo` fills 200 nb⁻¹; `?demo=N` fills N times that.
       run.fill = 1;
-      run.collect(2e39, 13000);
+      const steps = Math.max(1, Math.min(50, Number(demo) || 1));
+      for (let i = 0; i < steps; i++) run.collect(2e39, 13000);
     }
   }
   if (run.fill === 1 && machine.status === 'empty' && run.stores.mumu.size === 0) run.fill = 0;
@@ -603,6 +607,7 @@ export function App() {
           {explainer === 'magnets' && <MagnetExplainer machine={machine} />}
           {explainer === 'mass' && <MassExplainer channel={channel} />}
           {explainer === 'detector' && <DetectorExplainer store={run.stores[channel]} version={runVersion} />}
+          {explainer === 'noise' && <NoiseExplainer />}
           {explainer === 'glossary' && <GlossaryExplainer />}
         </ExplainerDialog>
       )}
