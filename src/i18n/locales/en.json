@@ -228,5 +228,6 @@
   "quiz.why-so-few.q": "Why are there so few events in the 4ℓ channel?",
   "quiz.why-so-few.a": "The Higgs boson is produced less often than the Z",
   "quiz.why-so-few.b": "The detector cannot see leptons",
-  "quiz.why-so-few.c": "The Higgs decays to four leptons only once in eight thousand times"
+  "quiz.why-so-few.c": "The Higgs decays to four leptons only once in eight thousand times",
+  "unit.e10": "×10¹⁰"
 }

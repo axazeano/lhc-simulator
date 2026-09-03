@@ -2,6 +2,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import { LHC } from '../data/lhc';
 import type { BeamParameters } from '../physics/accelerator';
 import { Hint } from './Hint';
+import { NumberKnob } from './NumberKnob';
 import { integratedLuminosityDisplay } from './units';
 
 interface Props {
@@ -43,57 +44,47 @@ export function BeamPanel(props: Props) {
       </p>
 
       <div className={knobClass} title={lockTitle}>
-        <div className="knob-head">
-          <label htmlFor="bunches">{t('beam.bunches')}</label>
-          <output htmlFor="bunches" className="mono">{number(beam.bunches)}</output>
-        </div>
-        <input
+        <NumberKnob
           id="bunches"
-          type="range"
-          disabled={locked}
+          label={t('beam.bunches')}
+          value={beam.bunches}
           min={1}
           max={LHC.maxBunches}
           step={1}
-          value={beam.bunches}
-          onChange={(e) => props.onBeam({ ...beam, bunches: Number(e.target.value) })}
+          disabled={locked}
+          onChange={(v) => props.onBeam({ ...beam, bunches: Math.round(v) })}
         />
         <Hint textKey="hint.bunches.what" href={SOURCES.bunches} />
       </div>
 
       <div className={knobClass} title={lockTitle}>
-        <div className="knob-head">
-          <label htmlFor="protons">{t('beam.protonsPerBunch')}</label>
-          <output htmlFor="protons" className="mono">{scientific(beam.protonsPerBunch, 2)}</output>
-        </div>
-        <input
+        <NumberKnob
           id="protons"
-          type="range"
+          label={t('beam.protonsPerBunch')}
+          value={beam.protonsPerBunch / 1e10}
+          min={1}
+          max={15}
+          step={0.01}
+          sliderStep={0.1}
+          unit={t('unit.e10')}
           disabled={locked}
-          min={1e10}
-          max={1.5e11}
-          step={1e9}
-          value={beam.protonsPerBunch}
-          onChange={(e) => props.onBeam({ ...beam, protonsPerBunch: Number(e.target.value) })}
+          onChange={(v) => props.onBeam({ ...beam, protonsPerBunch: v * 1e10 })}
         />
         <Hint textKey="hint.protons.what" href={SOURCES.protons} />
       </div>
 
       <div className={knobClass} title={lockTitle}>
-        <div className="knob-head">
-          <label htmlFor="beta-star">{t('beam.betaStar')}</label>
-          <output htmlFor="beta-star" className="mono">
-            {number(beam.betaStarM, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t('unit.m')}
-          </output>
-        </div>
-        <input
+        <NumberKnob
           id="beta-star"
-          type="range"
-          disabled={locked}
+          label={t('beam.betaStar')}
+          value={beam.betaStarM}
           min={0.25}
           max={10}
-          step={0.05}
-          value={beam.betaStarM}
-          onChange={(e) => props.onBeam({ ...beam, betaStarM: Number(e.target.value) })}
+          step={0.01}
+          sliderStep={0.05}
+          unit={t('unit.m')}
+          disabled={locked}
+          onChange={(v) => props.onBeam({ ...beam, betaStarM: v })}
         />
         <Hint textKey="hint.betaStar.what" href={SOURCES.betaStar} />
       </div>

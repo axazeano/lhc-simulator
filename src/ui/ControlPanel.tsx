@@ -2,6 +2,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import { LHC_MACHINE_CONFIG, type FieldMode, type MachineState } from '../physics/accelerator';
 import type { LevelAccess } from '../tutorial/levels';
 import { Hint } from './Hint';
+import { NumberKnob } from './NumberKnob';
 import { TIME_SPEED_OPTIONS } from './timeSpeed';
 
 interface Props {
@@ -23,7 +24,7 @@ const SOURCES = {
 };
 
 export function ControlPanel(props: Props) {
-  const { t, number } = useI18n();
+  const { t } = useI18n();
   const { machine, timeSpeed, access } = props;
   const config = LHC_MACHINE_CONFIG;
   const beamPresent = machine.status !== 'empty';
@@ -43,22 +44,17 @@ export function ControlPanel(props: Props) {
       </div>
 
       <div className={`knob ${access.energy ? '' : 'locked'}`} title={access.energy ? undefined : lockTitle}>
-        <div className="knob-head">
-          <label htmlFor="target-energy">{t('controls.targetEnergy')}</label>
-          <output htmlFor="target-energy" className="mono">
-            {number(machine.targetEnergyGeV / 1000, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-            {t('unit.TeV')}
-          </output>
-        </div>
-        <input
+        <NumberKnob
           id="target-energy"
-          type="range"
+          label={t('controls.targetEnergy')}
+          value={machine.targetEnergyGeV}
           min={config.injectionEnergyGeV}
           max={config.maxEnergyGeV}
-          step={10}
-          value={machine.targetEnergyGeV}
+          step={1}
+          sliderStep={10}
+          unit={t('unit.GeV')}
           disabled={!access.energy}
-          onChange={(e) => props.onTargetEnergy(Number(e.target.value))}
+          onChange={props.onTargetEnergy}
         />
         <Hint textKey="hint.energy.what" href={SOURCES.energy} />
       </div>
@@ -82,21 +78,17 @@ export function ControlPanel(props: Props) {
             ))}
           </div>
         </div>
-        <div className="knob-head">
-          <label htmlFor="manual-field">{t('controls.manualField')}</label>
-          <output htmlFor="manual-field" className="mono">
-            {number(machine.fieldT, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} {t('unit.T')}
-          </output>
-        </div>
-        <input
+        <NumberKnob
           id="manual-field"
-          type="range"
+          label={t('controls.manualField')}
+          value={machine.fieldMode === 'manual' ? machine.manualFieldT : machine.fieldT}
           min={0}
           max={config.maxFieldT}
-          step={0.005}
-          value={machine.fieldMode === 'manual' ? machine.manualFieldT : machine.fieldT}
+          step={0.001}
+          sliderStep={0.005}
+          unit={t('unit.T')}
           disabled={machine.fieldMode === 'auto' || !access.manualField}
-          onChange={(e) => props.onManualField(Number(e.target.value))}
+          onChange={props.onManualField}
         />
         <Hint textKey="hint.field.what" href={SOURCES.field} />
       </div>

@@ -4,6 +4,7 @@ import { CHANNELS, CHANNEL_DEFINITIONS, type Channel } from '../physics/collisio
 import type { SelectionCuts } from '../physics/detector/detector';
 import type { LevelAccess } from '../tutorial/levels';
 import { Hint } from './Hint';
+import { NumberKnob } from './NumberKnob';
 
 interface Props {
   access: Pick<LevelAccess, 'ptCut' | 'massWindow' | 'channel'>;
@@ -160,21 +161,17 @@ export function AnalysisPanel(props: Props) {
       </div>
 
       <div className={`knob ${access.ptCut ? '' : 'locked'}`} title={access.ptCut ? undefined : lockTitle}>
-        <div className="knob-head">
-          <label htmlFor="pt-cut">{channel === 'mumu' ? t('analysis.ptCut') : t('analysis.ptCutParticle')}</label>
-          <output htmlFor="pt-cut" className="mono">
-            {number(props.cuts.ptMinGeV)} {t('unit.GeV')}
-          </output>
-        </div>
-        <input
+        <NumberKnob
           id="pt-cut"
-          type="range"
+          label={channel === 'mumu' ? t('analysis.ptCut') : t('analysis.ptCutParticle')}
+          value={props.cuts.ptMinGeV}
           min={definition.ptMinRange[0]}
           max={definition.ptMinRange[1]}
-          step={1}
-          value={props.cuts.ptMinGeV}
+          step={0.5}
+          sliderStep={1}
+          unit={t('unit.GeV')}
           disabled={!access.ptCut}
-          onChange={(e) => props.onCuts({ ptMinGeV: Number(e.target.value) })}
+          onChange={(v) => props.onCuts({ ptMinGeV: v })}
         />
         <p className="note">{t('analysis.resetNote')}</p>
         <Hint textKey="hint.ptCut.what" href={SOURCES.ptCut} />

@@ -716,3 +716,46 @@ select {
 .knob.locked button {
   cursor: not-allowed;
 }
+
+/* Number knobs: slider plus typed field */
+.knob-row {
+  flex-wrap: wrap;
+}
+
+.knob-row label {
+  flex: 1 1 auto;
+}
+
+.knob-row input[type='range'] {
+  flex: 1 1 100%;
+  margin-top: 4px;
+}
+
+.knob-field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.knob-input {
+  width: 92px;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  text-align: right;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.knob-input:disabled {
+  opacity: 0.6;
+}
+
+.knob-unit {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-2);
+}
