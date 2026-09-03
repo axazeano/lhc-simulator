@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { PARTICLES } from '../data/particles';
 import { useI18n } from '../i18n/I18nProvider';
 import type { Histogram } from '../physics/analysis/histogram';
 import type { MassWindow } from '../physics/analysis/window';
@@ -14,22 +13,10 @@ interface Props {
   window: MassWindow;
   logScale: boolean;
   showKnownMasses: boolean;
+  /** Masses to mark: what the player has discovered. */
+  markers: { label: string; mass: number }[];
 }
 
-const KNOWN: Record<Channel, { label: string; mass: number }[]> = {
-  mumu: [
-    { label: 'J/ψ', mass: PARTICLES.jpsi.massGeV },
-    { label: 'Υ(1S)', mass: PARTICLES.upsilon1s.massGeV },
-    { label: 'Υ(2S)', mass: PARTICLES.upsilon2s.massGeV },
-    { label: 'Υ(3S)', mass: PARTICLES.upsilon3s.massGeV },
-    { label: 'Z', mass: PARTICLES.z.massGeV },
-  ],
-  gammagamma: [{ label: 'H', mass: PARTICLES.higgs.massGeV }],
-  fourlepton: [
-    { label: 'Z', mass: PARTICLES.z.massGeV },
-    { label: 'H', mass: PARTICLES.higgs.massGeV },
-  ],
-};
 
 const MARGIN = { left: 56, right: 16, top: 14, bottom: 34 };
 
@@ -159,7 +146,7 @@ export function HistogramCanvas(props: Props) {
       ctx.font = '600 11px "IBM Plex Sans", system-ui, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      for (const known of KNOWN[props.channel]) {
+      for (const known of props.markers) {
         if (known.mass < view.minGeV || known.mass > view.maxGeV) continue;
         const x = xOf(known.mass);
         ctx.beginPath();

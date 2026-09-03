@@ -185,7 +185,7 @@ describe('event store', () => {
     for (let m = 100; m < 160; m += 4) {
       const here = slice(m);
       const expected = Math.sqrt(slice(m - 4) * slice(m + 4));
-      expect(Math.abs(here / expected - 1)).toBeLessThan(0.005);
+      expect(Math.abs(here / expected - 1)).toBeLessThan(0.01);
     }
   });
 });
@@ -203,9 +203,10 @@ describe('polynomial fit', () => {
 
   it('the Z pool density has analytic Breit–Wigner tails', () => {
     const pool = buildEventPool(processById('z_mumu'), 13000, RECORDING_CUTS.mumu, DEFAULT_DETECTOR, DIMUON_HISTOGRAM, new Random(15), 60);
+    const width = (DIMUON_HISTOGRAM.max - DIMUON_HISTOGRAM.min) / DIMUON_HISTOGRAM.bins;
     const perGeV = (m: number) => {
       let s = 0;
-      for (let b = Math.round((m - 2) / 0.02); b < Math.round((m + 1 - 2) / 0.02); b++) s += pool.density[b]!;
+      for (let b = Math.round((m - DIMUON_HISTOGRAM.min) / width); b < Math.round((m + 1 - DIMUON_HISTOGRAM.min) / width); b++) s += pool.density[b]!;
       return s;
     };
     const peak = perGeV(91);

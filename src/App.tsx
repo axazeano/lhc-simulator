@@ -20,6 +20,8 @@ import {
 } from './physics/accelerator';
 import { analyseWindow, type MassWindow } from './physics/analysis/window';
 import { CollisionRun, DEFAULT_CUTS, crossSectionNb, processById, type Channel, type CutsByChannel } from './physics/collision';
+import { generateHiddenParticles, hiddenProcess, loadUniverseSeed } from './physics/collision/hidden';
+import { PARTICLE_LABELS, loadCatalog, saveCatalog, type CatalogEntry } from './ui/analysis/catalog';
 import type { SelectionCuts } from './physics/detector/detector';
 import { evaluateLevel, levelById, type Level, type LevelStatus, type Snapshot } from './tutorial/levels';
 import { loadProgress, saveProgress } from './tutorial/progress';
@@ -100,12 +102,29 @@ export function App() {
   timeSpeedRef.current = timeSpeed;
   beamRef.current = beam;
   cutsRef.current = cutsByChannel;
+  const hiddenRef = useRef<ReturnType<typeof generateHiddenParticles> | null>(null);
+  hiddenRef.current ??= generateHiddenParticles(loadUniverseSeed());
+  const hidden = hiddenRef.current;
   const runRef = useRef<CollisionRun | null>(null);
-  runRef.current ??= new CollisionRun(Date.now() >>> 0);
+  runRef.current ??= new CollisionRun(Date.now() >>> 0, undefined, hidden.map(hiddenProcess));
   const run = runRef.current;
+  const [catalog, setCatalog] = useState<CatalogEntry[]>(() => loadCatalog());
+  const onCatalog = useCallback((entries: CatalogEntry[]) => {
+    setCatalog(entries);
+    saveCatalog(entries);
+  }, []);
+  // Mass markers on the console histogram: only what this player has recorded or discovered.
+  const discoveredMarkers = useMemo(
+    () =>
+      catalog
+        .filter((e) => e.matchedId || e.claim?.status === 'confirmed')
+        .map((e) => ({ label: e.matchedId ? PARTICLE_LABELS[e.matchedId] ?? e.matchedId : e.name, mass: e.massGeV, channel: e.channel })),
+    [catalog],
+  );
   // Expose the run for debugging in development builds only; `?demo` pre-fills it with 200 nb⁻¹ at 13 TeV.
   if (import.meta.env.DEV) {
-    (window as unknown as { __lhcRun?: CollisionRun }).__lhcRun = run;
+    (window as unknown as { __lhcRun?: CollisionRun; __lhcHidden?: unknown }).__lhcRun = run;
+    (window as unknown as { __lhcHidden?: unknown }).__lhcHidden = hidden;
     if (run.stores.mumu.size === 0 && new URLSearchParams(window.location.search).has('demo')) {
       run.fill = 1;
       run.collect(2e39, 13000);
@@ -346,6 +365,9 @@ export function App() {
           onChannel={onChannel}
           onExplain={setExplainer}
           sqrtSGeV={machine.status === 'empty' ? 13000 : centerOfMassEnergyCollider(machine.energyGeV)}
+          hidden={hidden}
+          catalog={catalog}
+          onCatalog={onCatalog}
         />
       )}
 
@@ -406,6 +428,7 @@ export function App() {
               window={massWindow}
               logScale={logScale}
               showKnownMasses={showKnownMasses}
+              markers={discoveredMarkers.filter((m) => m.channel === channel)}
             />
           </div>
         )}

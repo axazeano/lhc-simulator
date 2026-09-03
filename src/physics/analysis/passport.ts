@@ -178,3 +178,51 @@ export function comparePassports(measured: MeasuredPassport, known: KnownPasspor
   }
   return { mass, width, charge, crossSection };
 }
+
+/** Upper-tail probability of a standard normal, P(X > z). */
+export function upperTail(z: number): number {
+  // Abramowitz–Stegun 7.1.26 for erfc, good to 1.5e-7.
+  const x = z / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * Math.abs(x));
+  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+  const erfc = poly * Math.exp(-x * x);
+  const p = 0.5 * erfc;
+  return x >= 0 ? p : 1 - p;
+}
+
+/** z such that P(X > z) = p, by bisection. */
+export function zFromUpperTail(p: number): number {
+  if (p <= 0) return 40;
+  if (p >= 0.5) return 0;
+  let lo = 0;
+  let hi = 40;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    if (upperTail(mid) > p) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+export interface LookElsewhere {
+  localSignificance: number;
+  /** Number of independent mass windows the search could have found a bump in. */
+  trials: number;
+  globalSignificance: number;
+}
+
+/**
+ * The look-elsewhere effect: a bump found by scanning many windows is less surprising than
+ * one found where it was predicted. With `trials` independent windows the chance that at
+ * least one fluctuates as high is 1 − (1 − p_local)^trials.
+ */
+export function lookElsewhere(localSignificance: number, searchedRangeGeV: number, windowWidthGeV: number): LookElsewhere {
+  const trials = Math.max(1, Math.round(searchedRangeGeV / Math.max(1e-9, windowWidthGeV)));
+  const local = Math.max(0, localSignificance);
+  const pLocal = upperTail(local);
+  // For a very strong local excess the tail probability underflows; the correction is then
+  // negligible and the global significance is simply the local one.
+  if (pLocal <= 0 || pLocal * trials < 1e-12) return { localSignificance, trials, globalSignificance: local };
+  const pGlobal = 1 - (1 - pLocal) ** trials;
+  return { localSignificance, trials, globalSignificance: Math.min(local, zFromUpperTail(pGlobal)) };
+}

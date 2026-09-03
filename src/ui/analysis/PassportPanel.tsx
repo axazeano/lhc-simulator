@@ -6,6 +6,7 @@ import {
   comparePassports,
   crossSectionFromYield,
   estimateWidth,
+  lookElsewhere,
   matchKnownParticle,
   simulateResponse,
   type KnownPassport,
@@ -14,6 +15,8 @@ import {
   type ResonanceResponse,
   type Verdict,
 } from '../../physics/analysis/passport';
+import type { HiddenParticle } from '../../physics/collision/hidden';
+import { PARTICLE_LABELS, type CatalogEntry } from './catalog';
 import type { Selection } from '../../physics/analysis/selection';
 import { analyseWindow } from '../../physics/analysis/window';
 import type { Channel } from '../../physics/collision/channels';
@@ -30,57 +33,23 @@ interface Props {
   fit: PeakFit | null;
   integratedLuminosityM2: number;
   sqrtSGeV: number;
+  currentFill: number;
+  hidden: HiddenParticle[];
+  catalog: CatalogEntry[];
+  onCatalog(entries: CatalogEntry[]): void;
 }
 
-export interface CatalogEntry {
-  id: string;
-  name: string;
-  channel: Channel;
-  massGeV: number;
-  massErrorGeV: number;
-  widthGeV: number | null;
-  sqrtSGeV: number;
-  matchedId: string | null;
-  date: string;
-}
-
-const CATALOG_KEY = 'lhc-simulator.catalog';
-
-export function loadCatalog(): CatalogEntry[] {
-  try {
-    const raw = localStorage.getItem(CATALOG_KEY);
-    return raw ? (JSON.parse(raw) as CatalogEntry[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCatalog(entries: CatalogEntry[]): void {
-  try {
-    localStorage.setItem(CATALOG_KEY, JSON.stringify(entries));
-  } catch {
-    // ignore
-  }
-}
-
-const PARTICLE_LABELS: Record<string, string> = {
-  jpsi: 'J/ψ',
-  upsilon1s: 'Υ(1S)',
-  upsilon2s: 'Υ(2S)',
-  upsilon3s: 'Υ(3S)',
-  z: 'Z',
-  w: 'W',
-  higgs: 'H',
-  muon: 'μ',
-};
+/** Significance required to claim a discovery, after the look-elsewhere correction. */
+const CLAIM_SIGMA = 5;
+/** Significance in independent data that confirms a claim. */
+const CONFIRM_SIGMA = 3;
 
 export function PassportPanel(props: Props) {
   const { t, number, scientific } = useI18n();
-  const { fit, channel, selection, store, sqrtSGeV } = props;
+  const { fit, channel, selection, store, sqrtSGeV, catalog } = props;
   const [response, setResponse] = useState<ResonanceResponse | null>(null);
   const [known, setKnown] = useState<KnownPassport | null | 'none'>(null);
   const [name, setName] = useState('');
-  const [catalog, setCatalog] = useState<CatalogEntry[]>(() => loadCatalog());
 
   // A new fit invalidates the response simulation and the comparison.
   useEffect(() => {
@@ -127,9 +96,9 @@ export function PassportPanel(props: Props) {
     if (!fit) return;
     setKnown(matchKnownParticle(fit.mean, fit.meanError, channel, sqrtSGeV) ?? 'none');
   };
-  const record = () => {
-    if (!fit || !measured) return;
-    const entry: CatalogEntry = {
+  const baseEntry = (): CatalogEntry | null => {
+    if (!fit || !measured) return null;
+    return {
       id: `${Date.now()}`,
       name: name.trim() || `X(${number(fit.mean, { maximumFractionDigits: 1 })})`,
       channel,
@@ -140,16 +109,77 @@ export function PassportPanel(props: Props) {
       matchedId: known && known !== 'none' ? known.id : null,
       date: new Date().toISOString().slice(0, 10),
     };
-    const next = [...catalog, entry];
-    setCatalog(next);
-    saveCatalog(next);
+  };
+  const record = () => {
+    const entry = baseEntry();
+    if (!entry) return;
+    props.onCatalog([...catalog, entry]);
     setName('');
   };
-  const removeEntry = (id: string) => {
-    const next = catalog.filter((e) => e.id !== id);
-    setCatalog(next);
-    saveCatalog(next);
+  const removeEntry = (id: string) => props.onCatalog(catalog.filter((e) => e.id !== id));
+
+  // Local and global significance of the fitted bump, for a discovery claim.
+  const claimStats = useMemo(() => {
+    if (!fit) return null;
+    const window = { minGeV: fit.mean - 2 * fit.sigma, maxGeV: fit.mean + 2 * fit.sigma };
+    const spec = { min: store.spec.min, max: store.spec.max, bins: store.spec.bins };
+    const a = analyseWindow(buildHistogram(store, selection, 'mass', spec).histogram, window);
+    const searched = (selection.massMaxGeV ?? store.spec.max) - (selection.massMinGeV ?? store.spec.min);
+    return { window, analysis: a, lookElsewhere: lookElsewhere(a.significance, searched, 4 * fit.sigma) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fit, selection, store, props.runVersion]);
+
+  const claim = () => {
+    const entry = baseEntry();
+    if (!entry || !fit || !claimStats) return;
+    entry.claim = {
+      status: 'claimed',
+      sigmaGeV: fit.sigma,
+      localSignificance: claimStats.lookElsewhere.localSignificance,
+      globalSignificance: claimStats.lookElsewhere.globalSignificance,
+      fillAtClaim: props.currentFill,
+      luminosityAtClaimM2: props.integratedLuminosityM2,
+      selection,
+    };
+    props.onCatalog([...catalog, entry]);
+    setName('');
   };
+
+  // Confirmation: re-analyse every open claim on the data of fills taken after it.
+  useEffect(() => {
+    const open = catalog.filter((e) => e.claim && e.claim.status === 'claimed' && e.channel === channel);
+    if (open.length === 0) return;
+    const c = store.columns;
+    const fills = new Set<number>();
+    for (let i = 0; i < c.count; i++) fills.add(c.fill[i]!);
+    let changed = false;
+    const next = catalog.map((e) => {
+      if (!e.claim || e.claim.status !== 'claimed' || e.channel !== channel) return e;
+      const later = [...fills].filter((f) => f > e.claim!.fillAtClaim);
+      if (later.length === 0) return e;
+      const sel: Selection = { ...e.claim.selection, fills: later };
+      const window = { minGeV: e.massGeV - 2 * e.claim.sigmaGeV, maxGeV: e.massGeV + 2 * e.claim.sigmaGeV };
+      const a = analyseWindow(buildHistogram(store, sel, 'mass', { min: store.spec.min, max: store.spec.max, bins: store.spec.bins }).histogram, window);
+      const laterLuminosity = props.integratedLuminosityM2 - e.claim.luminosityAtClaimM2;
+      let status: 'claimed' | 'confirmed' | 'refuted' = e.claim.status;
+      let hiddenIndex = e.claim.hiddenIndex;
+      if (a.significance >= CONFIRM_SIGMA && a.signal > 0) {
+        status = 'confirmed';
+        const found = props.hidden.find((h) => h.channel === channel && Math.abs(h.massGeV - e.massGeV) <= Math.max(3 * e.massErrorGeV, 0.02 * h.massGeV, 2 * e.claim!.sigmaGeV));
+        hiddenIndex = found?.index;
+      } else if (laterLuminosity >= e.claim.luminosityAtClaimM2 && a.significance < 1) {
+        status = 'refuted';
+      }
+      const updated: CatalogEntry = { ...e, claim: { ...e.claim, status, confirmationSignificance: a.significance, ...(hiddenIndex !== undefined ? { hiddenIndex } : {}) } };
+      if (status !== e.claim.status || Math.abs((e.claim.confirmationSignificance ?? -1) - a.significance) > 0.05) changed = true;
+      return updated;
+    });
+    if (changed) props.onCatalog(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.runVersion, channel]);
+
+  const revealed = catalog.filter((e) => e.claim?.status === 'confirmed' && e.claim.hiddenIndex !== undefined);
+  const hiddenFor = (index: number | undefined) => props.hidden.find((h) => h.index === index) ?? null;
 
   const mark = (v: Verdict | undefined) => (v === 'match' ? '✓' : v === 'mismatch' ? '✗' : '?');
   const markClass = (v: Verdict | undefined) => (v === 'match' ? 'ok' : v === 'mismatch' ? 'bad' : '');
@@ -169,15 +199,44 @@ export function PassportPanel(props: Props) {
           <span className="eyebrow">{t('passport.catalog')}</span>
           <div className="catalog-list">
             {catalog.map((e) => (
-              <span key={e.id} className="catalog-chip mono" title={`${t(`channel.${e.channel}`)} · ${e.date}`}>
+              <span key={e.id} className={`catalog-chip mono ${e.claim ? `claim-${e.claim.status}` : ''}`} title={`${t(`channel.${e.channel}`)} · ${e.date}`}>
                 {e.name} · {number(e.massGeV, { maximumFractionDigits: 2 })} {t('unit.GeV')}
                 {e.matchedId && <span className="dim"> = {PARTICLE_LABELS[e.matchedId] ?? e.matchedId}</span>}
+                {e.claim && (
+                  <span className="dim">
+                    {' '}
+                    · {t(`claim.${e.claim.status}`)}
+                    {e.claim.status === 'claimed' && e.claim.confirmationSignificance !== undefined && ` ${number(e.claim.confirmationSignificance, { maximumFractionDigits: 1 })}σ`}
+                    {e.claim.hiddenIndex !== undefined && ` = ${t('claim.hiddenName', { index: e.claim.hiddenIndex })}`}
+                  </span>
+                )}
                 <button type="button" className="chip-remove" aria-label={t('selection.delete')} onClick={() => removeEntry(e.id)}>
                   ×
                 </button>
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {revealed.length > 0 && (
+        <div className="reveal-box">
+          <span className="eyebrow">{t('claim.revealed')}</span>
+          <ul className="particle-list">
+            {revealed.map((e) => {
+              const h = hiddenFor(e.claim!.hiddenIndex);
+              if (!h) return null;
+              return (
+                <li key={e.id}>
+                  <span className="mono">{t('claim.hiddenName', { index: h.index })}</span>
+                  <span className="mono">{number(h.massGeV, { maximumFractionDigits: 1 })} {t('unit.GeV')}</span>
+                  <span className="mono">Γ {number(h.widthGeV, { maximumFractionDigits: 2 })} {t('unit.GeV')}</span>
+                  <span className="mono">σ·BR {scientific(h.crossSectionNbAt13TeV, 2)} {t('unit.nb')} (13 {t('unit.TeV')})</span>
+                  <span className="mono">{t(`channel.${h.channel}`)}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
@@ -284,6 +343,29 @@ export function PassportPanel(props: Props) {
           </div>
 
           {known === 'none' && <p className="quiz-feedback warn">{t('passport.noMatch')}</p>}
+          {known === 'none' && claimStats && measured && (
+            <div className="claim-box">
+              <span className="eyebrow">{t('claim.title')}</span>
+              <div className="readout-group">
+                <div className="readout">
+                  <span className="readout-label">{t('claim.local')}</span>
+                  <span className="readout-value mono">{number(claimStats.lookElsewhere.localSignificance, { maximumFractionDigits: 1 })} σ</span>
+                </div>
+                <div className="readout">
+                  <span className="readout-label">{t('claim.trials', { n: number(claimStats.lookElsewhere.trials) })}</span>
+                  <span className="readout-value mono">{number(claimStats.lookElsewhere.globalSignificance, { maximumFractionDigits: 1 })} σ</span>
+                </div>
+              </div>
+              <p className="note">{t('claim.explain')}</p>
+              <div className="button-row">
+                <button type="button" className="primary" disabled={claimStats.lookElsewhere.globalSignificance < CLAIM_SIGMA} onClick={claim}>
+                  {t('claim.button')}
+                </button>
+                {claimStats.lookElsewhere.globalSignificance < CLAIM_SIGMA && <span className="note">{t('claim.needMore', { sigma: CLAIM_SIGMA })}</span>}
+              </div>
+              <p className="note">{t('claim.confirmNote', { sigma: CONFIRM_SIGMA })}</p>
+            </div>
+          )}
           {comparison && (
             <p className={`quiz-feedback ${Object.values(comparison).every((v) => v !== 'mismatch') ? 'ok' : 'warn'}`}>
               {Object.values(comparison).every((v) => v !== 'mismatch') ? t('passport.consistent', { name: PARTICLE_LABELS[knownData!.id] ?? knownData!.id }) : t('passport.inconsistent')}

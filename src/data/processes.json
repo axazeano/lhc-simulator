@@ -155,7 +155,7 @@
       "finalState": "gammagamma",
       "massRangeGeV": [
         80,
-        200
+        2000
       ],
       "powerLawIndex": 4,
       "crossSectionNb": [
@@ -210,7 +210,7 @@
       "finalState": "fourlepton",
       "massRangeGeV": [
         100,
-        500
+        2000
       ],
       "powerLawIndex": 1.2,
       "crossSectionNb": [
@@ -224,6 +224,27 @@
         6.4e-05
       ],
       "source": "Game parametrisation of the non-resonant ZZ*→4ℓ background as dσ/dm ∝ m^-1.2 on 100–500 GeV, normalised so that the signal-to-background ratio in the Higgs window is about 1.5, as in ATLAS, JHEP 10 (2017) 132, arXiv:1708.02810. The real spectrum has a step at 2·m_Z that this shape ignores."
+    },
+    {
+      "id": "drellyan_mumu",
+      "kind": "continuum",
+      "finalState": "mumu",
+      "massRangeGeV": [
+        120,
+        2000
+      ],
+      "powerLawIndex": 4.5,
+      "crossSectionNb": [
+        0.0002,
+        0.0015,
+        0.003,
+        0.004,
+        0.005,
+        0.01,
+        0.0105,
+        0.011
+      ],
+      "source": "High-mass Drell–Yan above the Z: σ(m > 120 GeV, →μμ) ≈ 10 pb at 13 TeV with dσ/dm ∝ m^-4.5, in line with ATLAS, JHEP 08 (2016) 009, arXiv:1606.01736 (8 TeV) and the dilepton spectra of ATLAS, Phys. Lett. B 796 (2019) 68, arXiv:1903.06248 (13 TeV). Game parametrisation, ±50 %."
     }
   ]
 }

@@ -17,9 +17,9 @@ export interface ChannelDefinition {
 }
 
 export const CHANNEL_DEFINITIONS: Record<Channel, ChannelDefinition> = {
-  mumu: { spec: { min: 2, max: 200, bins: 9900 }, defaultPtMinGeV: 3, ptMinRange: [3, 50], unprescaledFromGeV: 60 },
-  gammagamma: { spec: { min: 80, max: 200, bins: 2400 }, defaultPtMinGeV: 30, ptMinRange: [15, 80], unprescaledFromGeV: 0 },
-  fourlepton: { spec: { min: 70, max: 400, bins: 3300 }, defaultPtMinGeV: 7, ptMinRange: [5, 30], unprescaledFromGeV: 0 },
+  mumu: { spec: { min: 2, max: 2000, bins: 79920 }, defaultPtMinGeV: 3, ptMinRange: [3, 50], unprescaledFromGeV: 60 },
+  gammagamma: { spec: { min: 80, max: 2000, bins: 38400 }, defaultPtMinGeV: 30, ptMinRange: [15, 80], unprescaledFromGeV: 0 },
+  fourlepton: { spec: { min: 70, max: 2000, bins: 19300 }, defaultPtMinGeV: 7, ptMinRange: [5, 30], unprescaledFromGeV: 0 },
 };
 
 export function isChannel(value: unknown): value is Channel {

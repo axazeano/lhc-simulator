@@ -3,9 +3,8 @@ import { reconstructParticle, type DetectorModel, type SelectionCuts } from '../
 import { add, azimuth, fromPtRapidityPhiM, invariantMass, pseudorapidity, rapidity, transverseMomentum, type FourVector } from '../fourvector';
 import type { RecordedParticle } from './eventStore';
 import type { Random } from '../random';
-import { PARTICLES } from '../../data/particles';
 import { BREIT_WIGNER_REACH, decayForProcess, generateWeightedEvent, powerLawMassDensity } from './generator';
-import type { ProcessDefinition } from './processes';
+import { resonanceMassGeV, resonanceWidthGeV, type ProcessDefinition } from './processes';
 
 /**
  * A pool describes the reconstructed events of one process at one √s, recorded at the
@@ -144,9 +143,8 @@ export function buildEventPool(
   let smoothed: Float64Array;
   if (isContinuum && process.massRangeGeV && process.powerLawIndex !== undefined) {
     smoothed = continuumDensity(raw, generated, process.massRangeGeV[0], process.massRangeGeV[1], process.powerLawIndex);
-  } else if (process.kind === 'resonance' && process.particle) {
-    const particle = PARTICLES[process.particle];
-    smoothed = resonanceDensity(acceptedTrue, generated, particle.massGeV, particle.widthGeV, resolution, spec);
+  } else if (process.kind === 'resonance') {
+    smoothed = resonanceDensity(acceptedTrue, generated, resonanceMassGeV(process), resonanceWidthGeV(process), resolution, spec);
   } else {
     smoothed = Float64Array.from(raw.counts);
   }
@@ -183,19 +181,19 @@ export function buildEventPool(
     fill[b] = fill[b]! + 1;
   }
 
-  // pT sampling neighbourhoods: widen around each bin until enough pool events are inside,
-  // because the pT distribution changes slowly with mass while single bins hold only a few events.
+  // pT sampling neighbourhoods: the pool events nearest in mass to each bin. Events are sorted
+  // by bin in binIndex, so the slice around the bin's position holds its nearest neighbours,
+  // whatever the local density.
   const ptSliceStart = new Int32Array(spec.bins);
   const ptSliceEnd = new Int32Array(spec.bins);
+  const half = Math.floor(PT_SAMPLE_SIZE / 2);
   for (let b = 0; b < spec.bins; b++) {
-    let lo = b;
-    let hi = b;
-    while (binStart[hi + 1]! - binStart[lo]! < PT_SAMPLE_SIZE && (lo > 0 || hi < spec.bins - 1)) {
-      if (lo > 0) lo -= 1;
-      if (hi < spec.bins - 1) hi += 1;
-    }
-    ptSliceStart[b] = binStart[lo]!;
-    ptSliceEnd[b] = binStart[hi + 1]!;
+    const centre = binStart[b]! + Math.floor((binStart[b + 1]! - binStart[b]!) / 2);
+    let start = Math.max(0, centre - half);
+    let end = Math.min(events.length, start + PT_SAMPLE_SIZE);
+    start = Math.max(0, end - PT_SAMPLE_SIZE);
+    ptSliceStart[b] = start;
+    ptSliceEnd[b] = end;
   }
 
   return {

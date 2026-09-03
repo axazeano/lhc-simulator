@@ -5,7 +5,7 @@ import { RECORDING_CUTS } from '../collision/run';
 import { invariantMass } from '../fourvector';
 import { Random } from '../random';
 import type { PeakFit } from './fit';
-import { HBAR_GEV_S, comparePassports, crossSectionFromYield, estimateWidth, matchKnownParticle, simulateResponse } from './passport';
+import { HBAR_GEV_S, comparePassports, crossSectionFromYield, estimateWidth, lookElsewhere, matchKnownParticle, simulateResponse, upperTail, zFromUpperTail } from './passport';
 import { defaultSelection } from './selection';
 
 function fitLike(mean: number, sigma: number): PeakFit {
@@ -87,5 +87,26 @@ describe('particle passport', () => {
     expect(wrong.charge).toBe('mismatch');
     expect(wrong.crossSection).toBe('mismatch');
     expect(PARTICLES.z.decays.length).toBeGreaterThan(3);
+  });
+});
+
+describe('look-elsewhere effect', () => {
+  it('normal tail and its inverse agree', () => {
+    expect(upperTail(0)).toBeCloseTo(0.5, 6);
+    expect(upperTail(1.96)).toBeCloseTo(0.025, 3);
+    expect(upperTail(5)).toBeCloseTo(2.87e-7, 8);
+    expect(zFromUpperTail(0.025)).toBeCloseTo(1.96, 2);
+    expect(zFromUpperTail(2.87e-7)).toBeCloseTo(5, 1);
+  });
+
+  it('a 3σ local bump found in 500 windows is not even 1σ globally; 6σ local survives', () => {
+    const weak = lookElsewhere(3, 2000, 4);
+    expect(weak.trials).toBe(500);
+    expect(weak.globalSignificance).toBeLessThan(1.5);
+    const strong = lookElsewhere(6.5, 2000, 4);
+    expect(strong.globalSignificance).toBeGreaterThan(5);
+    expect(strong.globalSignificance).toBeLessThan(6.5);
+    const huge = lookElsewhere(32, 2000, 200);
+    expect(huge.globalSignificance).toBeCloseTo(32, 6);
   });
 });

@@ -62,6 +62,8 @@ function channelOf(process: ProcessDefinition): Channel | null {
 
 export class CollisionRun {
   readonly stores: Record<Channel, EventStore>;
+  /** Every process this run simulates: the table plus the universe's hidden particles. */
+  readonly processes: readonly ProcessDefinition[];
   integratedLuminosityM2 = 0;
   collisions = 0;
   simulatedEvents = 0;
@@ -69,9 +71,10 @@ export class CollisionRun {
   private readonly pools = new Map<string, EventPool>();
   private readonly detector: DetectorModel;
 
-  constructor(seed = 12345, detector: DetectorModel = DEFAULT_DETECTOR) {
+  constructor(seed = 12345, detector: DetectorModel = DEFAULT_DETECTOR, extraProcesses: readonly ProcessDefinition[] = []) {
     this.rng = new Random(seed);
     this.detector = detector;
+    this.processes = [...PROCESSES, ...extraProcesses];
     this.stores = {
       mumu: new EventStore(CHANNEL_DEFINITIONS.mumu.spec),
       gammagamma: new EventStore(CHANNEL_DEFINITIONS.gammagamma.spec),
@@ -105,7 +108,7 @@ export class CollisionRun {
     const visibleByProcess: Record<string, number> = {};
     for (const channel of CHANNELS) {
       for (const [index, count] of this.stores[channel].countByProcess(cuts[channel].ptMinGeV)) {
-        const process = PROCESSES[index];
+        const process = this.processes[index];
         if (process) visibleByProcess[process.id] = (visibleByProcess[process.id] ?? 0) + count;
       }
     }
@@ -134,8 +137,8 @@ export class CollisionRun {
   collect(deltaLuminosityM2: number, sqrtSGeV: number): void {
     if (deltaLuminosityM2 <= 0) return;
     this.integratedLuminosityM2 += deltaLuminosityM2;
-    for (let index = 0; index < PROCESSES.length; index++) {
-      const process = PROCESSES[index]!;
+    for (let index = 0; index < this.processes.length; index++) {
+      const process = this.processes[index]!;
       const sigma = crossSectionNb(process, sqrtSGeV);
       if (sigma <= 0) continue;
       const expected = expectedCount(sigma, deltaLuminosityM2);

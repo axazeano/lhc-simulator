@@ -1,7 +1,7 @@
 import { PARTICLES } from '../../data/particles';
 import { add, boostToFrameOf, fromPtRapidityPhiM, type FourVector } from '../fourvector';
 import type { Random } from '../random';
-import type { ProcessDefinition } from './processes';
+import { resonanceMassGeV, resonanceWidthGeV, type ProcessDefinition } from './processes';
 
 /**
  * Toy event generator. Produces the four-vectors of the final-state particles of a resonance
@@ -46,13 +46,14 @@ const MIN_PAIR_MASS = 12;
 export const BREIT_WIGNER_REACH = 40;
 
 export function sampleParentMass(process: ProcessDefinition, rng: Random): number {
-  if (process.kind === 'resonance' && process.particle) {
-    const particle = PARTICLES[process.particle];
+  if (process.kind === 'resonance') {
+    const massGeV = resonanceMassGeV(process);
+    const widthGeV = resonanceWidthGeV(process);
     // Keep the tails physical: sample within ±40 widths of the peak (and above threshold)
     // from the truncated distribution, so nothing accumulates at the cut.
-    const limit = BREIT_WIGNER_REACH * particle.widthGeV;
-    const lo = Math.max(particle.massGeV - limit, 2 * MUON_MASS + 1e-6);
-    return rng.breitWignerTruncated(particle.massGeV, particle.widthGeV, lo, particle.massGeV + limit);
+    const limit = BREIT_WIGNER_REACH * widthGeV;
+    const lo = Math.max(massGeV - limit, 2 * MUON_MASS + 1e-6);
+    return rng.breitWignerTruncated(massGeV, widthGeV, lo, massGeV + limit);
   }
   if (process.kind === 'continuum' && process.massRangeGeV && process.powerLawIndex !== undefined) {
     return rng.powerLaw(process.massRangeGeV[0], process.massRangeGeV[1], process.powerLawIndex);

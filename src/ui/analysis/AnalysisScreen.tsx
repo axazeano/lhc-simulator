@@ -15,6 +15,8 @@ import { FitPanel } from './FitPanel';
 import { PlotCanvas } from './PlotCanvas';
 import { SelectionEditor } from './SelectionEditor';
 import { PassportPanel } from './PassportPanel';
+import type { CatalogEntry } from './catalog';
+import type { HiddenParticle } from '../../physics/collision/hidden';
 
 interface Props {
   run: CollisionRun;
@@ -24,6 +26,9 @@ interface Props {
   onExplain(topic: ExplainerTopic): void;
   /** √s the data is being taken at, for acceptance simulation and cross-section tables. */
   sqrtSGeV: number;
+  hidden: HiddenParticle[];
+  catalog: CatalogEntry[];
+  onCatalog(entries: CatalogEntry[]): void;
 }
 
 const STORAGE_KEY = 'lhc-simulator.selections';
@@ -64,7 +69,7 @@ function downloadCsv(name: string, rows: string[][]): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain, sqrtSGeV }: Props) {
+export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain, sqrtSGeV, hidden, catalog, onCatalog }: Props) {
   const { t, number, scientific } = useI18n();
   const definition = CHANNEL_DEFINITIONS[channel];
   const store = run.stores[channel];
@@ -202,6 +207,12 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
               <span className="live-value mono">{number(fills.length)}</span>
             </span>
             <span className="live">
+              <span className="live-label">{t('analysisScreen.hidden')}</span>
+              <span className="live-value mono">
+                {number(catalog.filter((e) => e.claim?.status === 'confirmed' && e.claim.hiddenIndex !== undefined).length)} / {number(hidden.length)}
+              </span>
+            </span>
+            <span className="live">
               <span className="live-label">{t('analysisScreen.integrated')}</span>
               <span className="live-value mono">
                 {number(integrated.value, { maximumSignificantDigits: 3 })} {t(integrated.unitKey)}
@@ -297,6 +308,10 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
           fit={variable === 'mass' ? fit : null}
           integratedLuminosityM2={run.integratedLuminosityM2}
           sqrtSGeV={sqrtSGeV}
+          currentFill={run.fill}
+          hidden={hidden}
+          catalog={catalog}
+          onCatalog={onCatalog}
         />
 
         <EventTable store={store} version={runVersion} mask={mask} selected={selectedEvent} onSelect={setSelectedEvent} />

@@ -15,11 +15,29 @@ export interface ProcessDefinition {
   id: string;
   kind: ProcessKind;
   particle?: ParticleId;
+  /** Mass and width for resonances that are not in the particle table (hidden particles). */
+  massGeV?: number;
+  widthGeV?: number;
+  /** True for particles the game invented; they must never be revealed by the process id. */
+  hidden?: boolean;
   finalState?: FinalState;
   massRangeGeV?: [number, number];
   powerLawIndex?: number;
   crossSectionNb: number[];
   source: string;
+}
+
+/** Mass of a resonance process, from the particle table or the definition itself. */
+export function resonanceMassGeV(process: ProcessDefinition): number {
+  if (process.massGeV !== undefined) return process.massGeV;
+  if (process.particle) return PARTICLES[process.particle].massGeV;
+  throw new Error(`Process ${process.id} has no mass`);
+}
+
+export function resonanceWidthGeV(process: ProcessDefinition): number {
+  if (process.widthGeV !== undefined) return process.widthGeV;
+  if (process.particle) return PARTICLES[process.particle].widthGeV;
+  return 0;
 }
 
 interface RawProcess {
@@ -60,7 +78,7 @@ export function processById(id: string): ProcessDefinition {
 
 /** Minimum √s at which the process can occur, in GeV. */
 export function thresholdGeV(process: ProcessDefinition): number {
-  if (process.kind === 'resonance' && process.particle) return PARTICLES[process.particle].massGeV;
+  if (process.kind === 'resonance') return resonanceMassGeV(process);
   if (process.kind === 'continuum' && process.massRangeGeV) return process.massRangeGeV[0];
   return 2 * 0.938;
 }
