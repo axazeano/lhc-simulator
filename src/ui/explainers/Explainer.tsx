@@ -1,7 +1,13 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
 
-export type ExplainerTopic = 'beam' | 'magnets' | 'mass';
+export type ExplainerTopic = 'beam' | 'magnets' | 'mass' | 'glossary';
+
+export const EXPLAINER_TOPICS: readonly ExplainerTopic[] = ['beam', 'magnets', 'mass', 'glossary'];
+
+export function isExplainerTopic(value: unknown): value is ExplainerTopic {
+  return typeof value === 'string' && (EXPLAINER_TOPICS as readonly string[]).includes(value);
+}
 
 interface DialogProps {
   topic: ExplainerTopic;

@@ -961,3 +961,107 @@ dialog.explainer::backdrop {
   color: var(--ink-2);
   font-size: 12.5px;
 }
+
+/* Stage 4: header tools, glossary, reset */
+.header-tools {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reset-progress {
+  margin-top: 12px;
+  font-size: 12.5px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.glossary {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.glossary-entry {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 4px 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 600px) {
+  .glossary-entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.glossary dt {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.glossary dd {
+  margin: 0;
+  max-width: 62ch;
+}
+
+@media (max-width: 680px) {
+  .app-header {
+    flex-direction: column;
+  }
+  .tutorial {
+    padding: 12px 14px;
+  }
+  .level-title {
+    font-size: 20px;
+  }
+  .knob-input {
+    width: 84px;
+  }
+  .explainer-body {
+    padding: 16px 16px 24px;
+  }
+  .explainer-header h2 {
+    font-size: 20px;
+  }
+}
+
+/* Grid and flex children must be allowed to shrink below their content width on narrow screens. */
+.layout > *,
+.tutorial > *,
+.panel,
+.tutorial-body,
+.knob,
+.readout-group {
+  min-width: 0;
+}
+
+.readout-value {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.panel-head {
+  flex-wrap: wrap;
+}
+
+.knob-head {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 680px) {
+  .ring-wrap {
+    max-height: none;
+  }
+  .histogram-panel {
+    min-height: 300px;
+  }
+  .histogram-wrap,
+  .histogram-canvas {
+    min-height: 260px;
+  }
+}

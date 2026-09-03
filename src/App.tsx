@@ -30,7 +30,9 @@ import { HistogramCanvas } from './ui/HistogramCanvas';
 import { Readouts } from './ui/Readouts';
 import { RingCanvas } from './ui/RingCanvas';
 import { TutorialPanel } from './ui/TutorialPanel';
-import { ExplainerDialog, type ExplainerTopic } from './ui/explainers/Explainer';
+import { ExplainerDialog, isExplainerTopic, type ExplainerTopic } from './ui/explainers/Explainer';
+import { GlossaryExplainer } from './ui/explainers/GlossaryExplainer';
+import { isMuted, play, setMuted } from './ui/sound';
 import { BeamExplainer } from './ui/explainers/BeamExplainer';
 import { MagnetExplainer } from './ui/explainers/MagnetExplainer';
 import { MassExplainer } from './ui/explainers/MassExplainer';
@@ -74,8 +76,15 @@ export function App() {
   // `?explain=beam|magnets|mass` opens an explainer on load, handy for linking and screenshots.
   const [explainer, setExplainer] = useState<ExplainerTopic | null>(() => {
     const requested = new URLSearchParams(window.location.search).get('explain');
-    return requested === 'beam' || requested === 'magnets' || requested === 'mass' ? requested : null;
+    return isExplainerTopic(requested) ? requested : null;
   });
+  const [muted, setMutedState] = useState(() => isMuted());
+  const toggleMuted = () => {
+    const next = !muted;
+    setMuted(next);
+    setMutedState(next);
+    if (!next) play('click');
+  };
   const closeExplainer = useCallback(() => setExplainer(null), []);
 
   // The simulation loop reads the latest state through refs so that actions and ticks never race.
@@ -91,10 +100,13 @@ export function App() {
   const run = runRef.current;
 
   const update = useCallback((fn: (state: MachineState) => MachineState) => {
-    const next = fn(machineRef.current);
-    if (next !== machineRef.current) {
+    const previous = machineRef.current;
+    const next = fn(previous);
+    if (next !== previous) {
       machineRef.current = next;
       setMachine(next);
+      if (next.status === 'lost' && previous.status !== 'lost') play('lost');
+      else if (previous.status === 'empty' && next.status !== 'empty' && next.status !== 'lost') play('inject');
     }
   }, []);
 
@@ -154,6 +166,22 @@ export function App() {
   const analysis = useMemo(() => analyseWindow(histogram, massWindow), [histogram, runVersion, massWindow]);
   const cuts = cutsByChannel[channel];
 
+  const fiveSigmaRef = useRef(false);
+  useEffect(() => {
+    const reached = analysis.significance >= 5 && analysis.signal >= 20;
+    if (reached && !fiveSigmaRef.current) play('fiveSigma');
+    fiveSigmaRef.current = reached;
+  }, [analysis.significance, analysis.signal]);
+
+  const resetProgress = useCallback(() => {
+    if (!window.confirm(t('tutorial.resetConfirm'))) return;
+    const fresh = { completed: [], currentLevel: 'first-beam' };
+    saveProgress(fresh);
+    setProgress(fresh);
+    applyLevelRef.current?.(levelById('first-beam'));
+  }, [t]);
+  const applyLevelRef = useRef<((next: Level) => void) | null>(null);
+
   const resetRun = useCallback(() => {
     run.reset();
     setRunVersion((v) => v + 1);
@@ -183,6 +211,7 @@ export function App() {
     },
     [resetRun],
   );
+  applyLevelRef.current = applyLevel;
 
   const levelSnapshot: Snapshot = useMemo(
     () => ({
@@ -206,8 +235,10 @@ export function App() {
     if (levelStatus !== 'playing') return;
     if (evaluation.failed) {
       setLevelStatus('failed');
+      if (machine.status !== 'lost') play('lost');
     } else if (evaluation.completed) {
       setLevelStatus('completed');
+      play('complete');
       setProgress((p) => {
         if (p.completed.includes(level.id)) return p;
         const updated = { ...p, completed: [...p.completed, level.id] };
@@ -215,7 +246,7 @@ export function App() {
         return updated;
       });
     }
-  }, [evaluation, levelStatus, level.id]);
+  }, [evaluation, levelStatus, level.id, machine.status]);
 
   const completedSet = useMemo(() => new Set(progress.completed), [progress.completed]);
 
@@ -264,16 +295,24 @@ export function App() {
           <h1>{t('app.title')}</h1>
           <p className="eyebrow">{t('app.stage')}</p>
         </div>
-        <label className="language">
-          <span className="eyebrow">{t('app.language')}</span>
-          <select value={locale} onChange={(e) => setLocale(e.target.value as typeof locale)}>
-            {LOCALE_IDS.map((id) => (
-              <option key={id} value={id}>
-                {LOCALES[id].name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="header-tools">
+          <button type="button" className="explain-button" onClick={() => setExplainer('glossary')}>
+            {t('explainer.glossary.title')}
+          </button>
+          <button type="button" className="explain-button" onClick={toggleMuted} aria-pressed={!muted}>
+            {muted ? t('sound.off') : t('sound.on')}
+          </button>
+          <label className="language">
+            <span className="eyebrow">{t('app.language')}</span>
+            <select value={locale} onChange={(e) => setLocale(e.target.value as typeof locale)}>
+              {LOCALE_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {LOCALES[id].name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </header>
 
       <TutorialPanel
@@ -287,6 +326,7 @@ export function App() {
         onAnswer={onAnswer}
         onRestart={() => applyLevel(level)}
         onNext={onNext}
+        onResetProgress={resetProgress}
       />
 
       <main className="layout">
@@ -367,6 +407,7 @@ export function App() {
           )}
           {explainer === 'magnets' && <MagnetExplainer machine={machine} />}
           {explainer === 'mass' && <MassExplainer channel={channel} />}
+          {explainer === 'glossary' && <GlossaryExplainer />}
         </ExplainerDialog>
       )}
     </div>

@@ -12,6 +12,7 @@ interface Props {
   onAnswer(questionId: string, option: number): void;
   onRestart(): void;
   onNext(): void;
+  onResetProgress(): void;
 }
 
 export function TutorialPanel(props: Props) {
@@ -47,6 +48,9 @@ export function TutorialPanel(props: Props) {
             );
           })}
         </ol>
+        <button type="button" className="reset-progress" onClick={props.onResetProgress}>
+          {t('tutorial.resetProgress')}
+        </button>
       </div>
 
       <div className="tutorial-body">
