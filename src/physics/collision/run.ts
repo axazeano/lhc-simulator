@@ -21,8 +21,8 @@ export const DIMUON_HISTOGRAM: HistogramSpec = CHANNEL_DEFINITIONS.mumu.spec;
 /** Below this expected count per step, events are simulated one by one. */
 const INDIVIDUAL_LIMIT = 300;
 /** Keep sampling until the template holds this many accepted events, within the sample budget. */
-const TEMPLATE_MIN_ACCEPTED = 6000;
-const TEMPLATE_MAX_SAMPLES = 200000;
+const TEMPLATE_MIN_ACCEPTED = 12000;
+const TEMPLATE_MAX_SAMPLES = 400000;
 /**
  * Templates are smoothed with a Gaussian kernel. For resonances the kernel is a quarter of the
  * detector mass resolution (about 0.9 %), which widens a peak by only 3 % but removes the empty
@@ -32,6 +32,12 @@ const TEMPLATE_MAX_SAMPLES = 200000;
 const RESONANCE_SMOOTHING_FRACTION = 0.25 * 0.009;
 const CONTINUUM_SMOOTHING_FRACTION = 0.03;
 const CONTINUUM_MIN_ACCEPTED = 12000;
+/**
+ * In the sparse tails of a resonance template the kernel is widened by this factor, so that a
+ * handful of Monte Carlo events does not freeze into lumps when scaled to millions of events.
+ * The peak itself, where the template is dense, keeps the narrow kernel.
+ */
+const TAIL_SMOOTHING_FACTOR = 6;
 
 interface Template {
   acceptance: number;
@@ -242,7 +248,9 @@ export function buildTemplate(
   const fractions = new Float64Array(spec.bins);
   const nonZero: number[] = [];
   if (acceptedWeight > 0) {
-    const smoothed = smoothCounts(histogram, isContinuum ? CONTINUUM_SMOOTHING_FRACTION : RESONANCE_SMOOTHING_FRACTION);
+    const smoothed = isContinuum
+      ? smoothCounts(histogram, CONTINUUM_SMOOTHING_FRACTION)
+      : smoothAdaptive(histogram, RESONANCE_SMOOTHING_FRACTION, TAIL_SMOOTHING_FACTOR);
     for (let b = 0; b < spec.bins; b++) {
       const c = smoothed[b]!;
       if (c > 0) {
@@ -272,5 +280,30 @@ export function smoothCounts(histogram: Histogram, fraction: number): Float64Arr
     for (let j = lo; j <= hi; j++) norm += Math.exp(-((j - b) ** 2) / (2 * sigma * sigma));
     for (let j = lo; j <= hi; j++) out[j]! += (c * Math.exp(-((j - b) ** 2) / (2 * sigma * sigma))) / norm;
   }
+  return out;
+}
+
+/**
+ * Two-scale smoothing: a narrow kernel where the template is dense (the peak) blended into a
+ * wide kernel where it is sparse (the tails). The blend weight follows the narrow-smoothed
+ * density relative to its maximum, so the transition is gradual. The total is preserved.
+ */
+export function smoothAdaptive(histogram: Histogram, fraction: number, tailFactor: number): Float64Array {
+  const narrow = smoothCounts(histogram, fraction);
+  const wide = smoothCounts(histogram, fraction * tailFactor);
+  let max = 0;
+  for (let b = 0; b < narrow.length; b++) if (narrow[b]! > max) max = narrow[b]!;
+  if (max <= 0) return narrow;
+  const out = new Float64Array(narrow.length);
+  const dense = 0.05 * max;
+  let total = 0;
+  let sumIn = 0;
+  for (let b = 0; b < narrow.length; b++) {
+    const w = Math.min(1, narrow[b]! / dense);
+    out[b] = w * narrow[b]! + (1 - w) * wide[b]!;
+    total += out[b]!;
+    sumIn += histogram.counts[b]!;
+  }
+  if (total > 0) for (let b = 0; b < out.length; b++) out[b]! *= sumIn / total;
   return out;
 }

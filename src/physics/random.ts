@@ -68,6 +68,19 @@ export class Random {
     return mass + (width / 2) * Math.tan(Math.PI * (this.next() - 0.5));
   }
 
+  /**
+   * Breit–Wigner restricted to [min, max] by inverting the CDF, so nothing piles up at the
+   * edges. Falls back to the location when the interval is empty.
+   */
+  breitWignerTruncated(mass: number, width: number, min: number, max: number): number {
+    if (width <= 0 || max <= min) return Math.min(max, Math.max(min, mass));
+    const cdf = (x: number) => 0.5 + Math.atan((2 * (x - mass)) / width) / Math.PI;
+    const lo = cdf(min);
+    const hi = cdf(max);
+    const u = lo + this.next() * (hi - lo);
+    return mass + (width / 2) * Math.tan(Math.PI * (u - 0.5));
+  }
+
   /** Power law dN/dm ∝ m^(-k) on [min, max], k ≠ 1. */
   powerLaw(min: number, max: number, k: number): number {
     const a = 1 - k;

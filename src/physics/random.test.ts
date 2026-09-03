@@ -57,4 +57,17 @@ describe('seeded random numbers', () => {
     const values = Array.from({ length: 20001 }, () => rng.breitWigner(91.19, 2.5)).sort((a, b) => a - b);
     expect(values[10000]).toBeCloseTo(91.19, 0);
   });
+
+  it('truncated breit–wigner stays inside its interval and matches the full one in the core', () => {
+    const rng = new Random(8);
+    const values = Array.from({ length: 20000 }, () => rng.breitWignerTruncated(91.19, 2.5, 66, 116));
+    expect(Math.min(...values)).toBeGreaterThanOrEqual(66);
+    expect(Math.max(...values)).toBeLessThanOrEqual(116);
+    // Nothing piles up at the edges: fewer than 0.2 % within 0.1 GeV of either cut.
+    const atEdges = values.filter((v) => v < 66.1 || v > 115.9).length / values.length;
+    expect(atEdges).toBeLessThan(0.002);
+    const core = values.filter((v) => Math.abs(v - 91.19) < 1.25).length / values.length;
+    expect(core).toBeGreaterThan(0.45);
+    expect(core).toBeLessThan(0.6);
+  });
 });

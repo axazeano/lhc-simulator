@@ -37,12 +37,11 @@ const MIN_PAIR_MASS = 12;
 export function sampleParentMass(process: ProcessDefinition, rng: Random): number {
   if (process.kind === 'resonance' && process.particle) {
     const particle = PARTICLES[process.particle];
-    let mass = rng.breitWigner(particle.massGeV, particle.widthGeV);
-    // Keep the tails physical: no negative masses, no sampling far beyond the peak.
+    // Keep the tails physical: sample within ±10 widths of the peak (and above threshold)
+    // from the truncated distribution, so nothing accumulates at the cut.
     const limit = 10 * particle.widthGeV;
-    if (mass < particle.massGeV - limit) mass = particle.massGeV - limit;
-    if (mass > particle.massGeV + limit) mass = particle.massGeV + limit;
-    return Math.max(mass, 2 * MUON_MASS + 1e-6);
+    const lo = Math.max(particle.massGeV - limit, 2 * MUON_MASS + 1e-6);
+    return rng.breitWignerTruncated(particle.massGeV, particle.widthGeV, lo, particle.massGeV + limit);
   }
   if (process.kind === 'continuum' && process.massRangeGeV && process.powerLawIndex !== undefined) {
     return rng.powerLaw(process.massRangeGeV[0], process.massRangeGeV[1], process.powerLawIndex);
@@ -117,12 +116,8 @@ export function decayTwoBody(
 
 /** Masses of the two Z (or Z*) in an X → ZZ* → 4ℓ chain for a parent of mass M. */
 export function sampleZPairMasses(massGeV: number, rng: Random): [number, number] {
-  const clampBreitWigner = (upper: number) => {
-    let m = rng.breitWigner(Z_MASS, Z_WIDTH);
-    if (m < Z_MASS - 5 * Z_WIDTH) m = Z_MASS - 5 * Z_WIDTH;
-    if (m > upper) m = upper;
-    return m;
-  };
+  const clampBreitWigner = (upper: number) =>
+    rng.breitWignerTruncated(Z_MASS, Z_WIDTH, Z_MASS - 5 * Z_WIDTH, Math.min(upper, Z_MASS + 5 * Z_WIDTH));
   // The first pair may take everything but the minimum mass of the second.
   const available = massGeV - MIN_PAIR_MASS;
   const m1 = available > Z_MASS - 3 * Z_WIDTH ? clampBreitWigner(available) : rng.uniform(MIN_PAIR_MASS, available);

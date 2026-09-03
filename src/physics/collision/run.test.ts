@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollisionRun, DIMUON_HISTOGRAM, buildTemplate, smoothCounts } from './run';
+import { CollisionRun, DIMUON_HISTOGRAM, buildTemplate, smoothAdaptive, smoothCounts } from './run';
 import { Histogram } from '../analysis/histogram';
 import { analyseWindow } from '../analysis/window';
 import { DEFAULT_DETECTOR } from '../detector/detector';
@@ -97,5 +97,37 @@ describe('collision run', () => {
     }
     expect(total).toBeGreaterThan(0.6);
     expect(template.acceptance).toBeGreaterThan(0.2);
+  });
+
+  it('the Z template has smooth tails and no pile-up at the ±10 Γ cuts', () => {
+    const template = buildTemplate(processById('z_mumu'), 13000, { ptMinGeV: 20 }, DEFAULT_DETECTOR, DIMUON_HISTOGRAM, new Random(10));
+    const h = new Histogram(DIMUON_HISTOGRAM);
+    const f = template.fractions;
+    // No spike at the cut edges: the bins around 66 and 116 GeV hold no more than their neighbours.
+    for (const edge of [66.2, 116.1]) {
+      const b = h.binOf(edge);
+      const local = (f[b]! + f[b - 1]! + f[b + 1]!) / 3;
+      let around = 0;
+      for (let k = -60; k <= 60; k++) if (Math.abs(k) > 10) around += f[b + k]!;
+      around /= 100;
+      expect(local).toBeLessThan(3 * around + 1e-9);
+    }
+    // Tails are smooth: every bin between 70 and 85 GeV stays within a factor 1.5 of its ±1 GeV neighbourhood.
+    for (let b = h.binOf(70); b < h.binOf(85); b++) {
+      let sum = 0;
+      for (let k = -50; k <= 50; k++) sum += f[b + k]!;
+      const mean = sum / 101;
+      if (mean > 0) expect(f[b]! / mean).toBeLessThan(1.5);
+    }
+  });
+
+  it('adaptive smoothing preserves the total', () => {
+    const h = new Histogram({ min: 0, max: 100, bins: 1000 });
+    h.addCounts(500, 1000);
+    h.addCounts(200, 3);
+    const out = smoothAdaptive(h, 0.01, 6);
+    let total = 0;
+    for (let b = 0; b < out.length; b++) total += out[b]!;
+    expect(total).toBeCloseTo(1003, 6);
   });
 });
