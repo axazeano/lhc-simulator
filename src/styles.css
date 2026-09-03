@@ -1524,3 +1524,262 @@ dialog.explainer::backdrop {
   color: var(--ink-2);
   font-weight: 400;
 }
+
+/* Research programme: rank badge, screen, missions, toasts */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.rank-badge-points {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+}
+
+.programme {
+  display: grid;
+  gap: 20px;
+}
+
+.programme-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.programme-rank {
+  font-size: 28px;
+  margin: 2px 0 6px;
+}
+
+.programme-reputation {
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.programme-points {
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.rep-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.rep-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+.rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 56px 140px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  opacity: 0.6;
+}
+
+.rank-row.reached {
+  opacity: 1;
+}
+
+.rank-row.current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.rank-name {
+  font-weight: 600;
+}
+
+.rank-gain {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.mission-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.mission {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.mission.done {
+  opacity: 0.7;
+}
+
+.mission.locked {
+  opacity: 0.55;
+}
+
+.mission.done .mission-mark {
+  color: var(--ok);
+}
+
+.mission-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mission-title {
+  font-weight: 600;
+}
+
+.mission-how,
+.mission-lock {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.35;
+}
+
+.mission-progress {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.mission-reward {
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.mission-reward.warn {
+  color: var(--warn);
+}
+
+.mission-list.compact .mission {
+  padding: 8px 10px;
+}
+
+.next-missions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.next-missions button {
+  align-self: flex-start;
+}
+
+.limit-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.toast {
+  position: relative;
+  padding: 12px 36px 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  animation: toast-in 0.25s ease;
+}
+
+.toast-mission {
+  border-left: 4px solid var(--ok);
+}
+
+.toast-rank {
+  border-left: 4px solid var(--accent);
+}
+
+.toast-penalty {
+  border-left: 4px solid var(--warn);
+}
+
+.toast-title {
+  font-weight: 600;
+}
+
+.toast-text {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.toast-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 16px;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (max-width: 680px) {
+  .rank-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+  .rank-gain {
+    grid-column: 2;
+  }
+}

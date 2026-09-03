@@ -9,6 +9,8 @@ import { ExplainerButton, type ExplainerTopic } from './explainers/Explainer';
 
 interface Props {
   access: Pick<LevelAccess, 'ptCut' | 'massWindow' | 'channel'>;
+  /** Channels closed by rank, with the rank that opens each. */
+  lockedChannels?: Partial<Record<Channel, string>>;
   channel: Channel;
   cuts: SelectionCuts;
   window: MassWindow;
@@ -95,10 +97,12 @@ export function AnalysisPanel(props: Props) {
               role="radio"
               aria-checked={channel === c}
               className={channel === c ? 'active' : ''}
-              disabled={!access.channel}
+              disabled={!access.channel || props.lockedChannels?.[c] !== undefined}
+              title={props.lockedChannels?.[c] ? t('rank.lockedChannel', { rank: props.lockedChannels[c]! }) : undefined}
               onClick={() => props.onChannel(c)}
             >
               {t(`channel.${c}`)}
+              {props.lockedChannels?.[c] && <span aria-hidden="true"> 🔒</span>}
             </button>
           ))}
         </div>

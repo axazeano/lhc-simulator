@@ -31,6 +31,10 @@ interface Props {
   hidden: HiddenParticle[];
   catalog: CatalogEntry[];
   onCatalog(entries: CatalogEntry[]): void;
+  /** Channels closed by rank, with the rank that opens each. */
+  lockedChannels: Partial<Record<Channel, string>>;
+  /** Whether discovery claims are open, and the rank that opens them. */
+  claims: { allowed: boolean; rank: string };
 }
 
 const STORAGE_KEY = 'lhc-simulator.selections';
@@ -71,7 +75,7 @@ function downloadCsv(name: string, rows: string[][]): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain, sqrtSGeV, hidden, catalog, onCatalog }: Props) {
+export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain, sqrtSGeV, hidden, catalog, onCatalog, lockedChannels, claims }: Props) {
   const { t, number, scientific } = useI18n();
   const definition = CHANNEL_DEFINITIONS[channel];
   const store = run.stores[channel];
@@ -221,8 +225,18 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
         <div className="analysis-summary">
           <div className="segmented" role="radiogroup" aria-label={t('analysisScreen.channel')}>
             {CHANNELS.map((c) => (
-              <button key={c} type="button" role="radio" aria-checked={channel === c} className={channel === c ? 'active' : ''} onClick={() => onChannel(c)}>
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={channel === c}
+                className={channel === c ? 'active' : ''}
+                disabled={lockedChannels[c] !== undefined}
+                title={lockedChannels[c] ? t('rank.lockedChannel', { rank: lockedChannels[c]! }) : undefined}
+                onClick={() => onChannel(c)}
+              >
                 {t(`channel.${c}`)}
+                {lockedChannels[c] && <span aria-hidden="true"> 🔒</span>}
               </button>
             ))}
           </div>
@@ -349,6 +363,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
           catalog={catalog}
           onCatalog={onCatalog}
           onProgress={setPassportProgress}
+          claims={claims}
         />
 
         <EventTable store={store} version={runVersion} mask={mask} selected={selectedEvent} onSelect={setSelectedEvent} />

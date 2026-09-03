@@ -1,4 +1,5 @@
 import { useI18n } from '../i18n/I18nProvider';
+import { LEVEL_REWARD } from '../game/missions';
 import { ALL_LEVELS, isLevelUnlocked, type Evaluation, type Level, type LevelStatus } from '../tutorial/levels';
 
 interface Props {
@@ -13,6 +14,9 @@ interface Props {
   onRestart(): void;
   onNext(): void;
   onResetProgress(): void;
+  /** In the sandbox: the nearest open missions of the research programme. */
+  nextMissions?: { id: string; reward: number; progress: string | null }[];
+  onOpenProgramme?(): void;
 }
 
 export function TutorialPanel(props: Props) {
@@ -115,6 +119,7 @@ export function TutorialPanel(props: Props) {
         {status === 'completed' && (
           <div className="level-status completed">
             <p className="level-status-title">{t('tutorial.completed')}</p>
+            <p className="note">{t('tutorial.reward', { n: String(LEVEL_REWARD) })}</p>
             <span className="eyebrow">{t('tutorial.card')}</span>
             <p>
               {t(level.cardKey)}{' '}
@@ -132,6 +137,29 @@ export function TutorialPanel(props: Props) {
                 {t('tutorial.restart')}
               </button>
             </div>
+          </div>
+        )}
+
+        {level.id === 'sandbox' && props.nextMissions && (
+          <div className="next-missions">
+            <span className="eyebrow">{t('programme.nextMissions')}</span>
+            {props.nextMissions.length === 0 && <p className="note">{t('programme.allDone')}</p>}
+            <ul className="mission-list compact">
+              {props.nextMissions.map((m) => (
+                <li key={m.id} className="mission open">
+                  <span className="mission-mark mono" aria-hidden="true">○</span>
+                  <span className="mission-body">
+                    <span className="mission-title">{t(`mission.${m.id}.title`)}</span>
+                    <span className="mission-how">{t(`mission.${m.id}.how`)}</span>
+                    {m.progress && <span className="mission-progress mono">{m.progress}</span>}
+                  </span>
+                  <span className="mission-reward mono">+{m.reward}</span>
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={props.onOpenProgramme}>
+              {t('programme.open')}
+            </button>
           </div>
         )}
 

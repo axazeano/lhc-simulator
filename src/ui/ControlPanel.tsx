@@ -17,6 +17,8 @@ interface Props {
   onManualField(fieldT: number): void;
   onTimeSpeed(factor: number): void;
   onExplain(topic: ExplainerTopic): void;
+  /** Rank limits in the sandbox: caps on the knobs and the rank that lifts them. */
+  limits?: { maxEnergyGeV: number; maxTimeSpeed: number; nextRank: string | null } | undefined;
 }
 
 const SOURCES = {
@@ -31,6 +33,12 @@ export function ControlPanel(props: Props) {
   const config = LHC_MACHINE_CONFIG;
   const beamPresent = machine.status !== 'empty';
   const lockTitle = t('tutorial.lockedKnob');
+  const maxEnergy = Math.min(config.maxEnergyGeV, props.limits?.maxEnergyGeV ?? Infinity);
+  const energyLimited = maxEnergy < config.maxEnergyGeV;
+  const timeOptions = TIME_SPEED_OPTIONS.filter((o) => o.factor <= (props.limits?.maxTimeSpeed ?? Infinity));
+  const timeLimited = timeOptions.length < TIME_SPEED_OPTIONS.length;
+  const limitNote = (limited: boolean) =>
+    limited && props.limits?.nextRank ? <p className="note limit-note">{t('rank.limitNote', { rank: props.limits.nextRank })}</p> : null;
 
   return (
     <section className="panel controls" aria-labelledby="controls-title">
@@ -54,13 +62,14 @@ export function ControlPanel(props: Props) {
           label={t('controls.targetEnergy')}
           value={machine.targetEnergyGeV}
           min={config.injectionEnergyGeV}
-          max={config.maxEnergyGeV}
+          max={maxEnergy}
           step={1}
           sliderStep={10}
           unit={t('unit.GeV')}
           disabled={!access.energy}
-          onChange={props.onTargetEnergy}
+          onChange={(e) => props.onTargetEnergy(Math.min(e, maxEnergy))}
         />
+        {limitNote(energyLimited)}
         <Hint textKey="hint.energy.what" href={SOURCES.energy} />
       </div>
 
@@ -103,12 +112,13 @@ export function ControlPanel(props: Props) {
           <label htmlFor="time-speed">{t('controls.timeSpeed')}</label>
         </div>
         <select id="time-speed" value={timeSpeed} disabled={!access.timeSpeed} onChange={(e) => props.onTimeSpeed(Number(e.target.value))}>
-          {TIME_SPEED_OPTIONS.map((option) => (
+          {timeOptions.map((option) => (
             <option key={option.factor} value={option.factor}>
               {t(option.labelKey)}
             </option>
           ))}
         </select>
+        {limitNote(timeLimited)}
         <Hint textKey="hint.timeSpeed.what" href={SOURCES.timeSpeed} />
       </div>
     </section>

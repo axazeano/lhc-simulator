@@ -16,6 +16,8 @@ interface Props {
   locked: boolean;
   onBeam(beam: BeamParameters): void;
   onExplain(topic: ExplainerTopic): void;
+  /** Rank limit in the sandbox on the number of bunches, and the rank that lifts it. */
+  limits?: { maxBunches: number; nextRank: string | null } | undefined;
 }
 
 const SOURCES = {
@@ -30,6 +32,7 @@ export function BeamPanel(props: Props) {
   const integrated = integratedLuminosityDisplay(props.integratedLuminosityM2);
   const knobClass = `knob ${locked ? 'locked' : ''}`;
   const lockTitle = locked ? t('tutorial.lockedKnob') : undefined;
+  const maxBunches = Math.min(LHC.maxBunches, props.limits?.maxBunches ?? Infinity);
 
   const row = (label: string, value: string) => (
     <div className="readout">
@@ -54,11 +57,12 @@ export function BeamPanel(props: Props) {
           label={t('beam.bunches')}
           value={beam.bunches}
           min={1}
-          max={LHC.maxBunches}
+          max={maxBunches}
           step={1}
           disabled={locked}
-          onChange={(v) => props.onBeam({ ...beam, bunches: Math.round(v) })}
+          onChange={(v) => props.onBeam({ ...beam, bunches: Math.min(maxBunches, Math.round(v)) })}
         />
+        {maxBunches < LHC.maxBunches && props.limits?.nextRank && <p className="note limit-note">{t('rank.limitNote', { rank: props.limits.nextRank })}</p>}
         <Hint textKey="hint.bunches.what" href={SOURCES.bunches} />
       </div>
 

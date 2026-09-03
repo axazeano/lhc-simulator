@@ -38,6 +38,7 @@ interface Props {
   catalog: CatalogEntry[];
   onCatalog(entries: CatalogEntry[]): void;
   onProgress?(state: { response: boolean; compared: boolean }): void;
+  claims: { allowed: boolean; rank: string };
 }
 
 /** Significance required to claim a discovery, after the look-elsewhere correction. */
@@ -362,12 +363,16 @@ export function PassportPanel(props: Props) {
                 </div>
               </div>
               <p className="note">{t('claim.explain')}</p>
-              <div className="button-row">
-                <button type="button" className="primary" disabled={claimStats.lookElsewhere.globalSignificance < CLAIM_SIGMA} onClick={claim}>
-                  {t('claim.button')}
-                </button>
-                {claimStats.lookElsewhere.globalSignificance < CLAIM_SIGMA && <span className="note">{t('claim.needMore', { sigma: CLAIM_SIGMA })}</span>}
-              </div>
+              {props.claims.allowed ? (
+                <div className="button-row">
+                  <button type="button" className="primary" disabled={claimStats.lookElsewhere.globalSignificance < CLAIM_SIGMA} onClick={claim}>
+                    {t('claim.button')}
+                  </button>
+                  {claimStats.lookElsewhere.globalSignificance < CLAIM_SIGMA && <span className="note">{t('claim.needMore', { sigma: CLAIM_SIGMA })}</span>}
+                </div>
+              ) : (
+                <p className="quiz-feedback warn">{t('claim.lockedByRank', { rank: props.claims.rank })}</p>
+              )}
               <p className="note">{t('claim.confirmNote', { sigma: CONFIRM_SIGMA })}</p>
             </div>
           )}

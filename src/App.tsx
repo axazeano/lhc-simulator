@@ -24,7 +24,25 @@ import { generateHiddenParticles, hiddenProcess, loadUniverseSeed } from './phys
 import { PARTICLE_LABELS, loadCatalog, saveCatalog, type CatalogEntry } from './ui/analysis/catalog';
 import type { SelectionCuts } from './physics/detector/detector';
 import { evaluateLevel, levelById, type Level, type LevelStatus, type Snapshot } from './tutorial/levels';
-import { loadProgress, saveProgress } from './tutorial/progress';
+import { EMPTY_PROGRESS, loadProgress, saveProgress, type Progress } from './tutorial/progress';
+import { CHANNELS } from './physics/collision/channels';
+import {
+  MISSIONS,
+  evaluateMissions,
+  missionById,
+  nextRank,
+  rankFor,
+  rankGain,
+  rankIndex,
+  rankUnlockingChannel,
+  rankUnlockingClaims,
+  reputationOf,
+  type MissionContext,
+  type Perks,
+} from './game/missions';
+import { ProgrammeScreen } from './ui/ProgrammeScreen';
+import { Toasts, type Toast } from './ui/Toasts';
+import { TIME_SPEED_OPTIONS } from './ui/timeSpeed';
 import { AnalysisPanel, VIEW_PRESETS } from './ui/AnalysisPanel';
 import { BeamPanel } from './ui/BeamPanel';
 import { ControlPanel } from './ui/ControlPanel';
@@ -77,9 +95,16 @@ export function App() {
   const [logScale, setLogScale] = useState(true);
   const [showKnownMasses, setShowKnownMasses] = useState(false);
   const [runVersion, setRunVersion] = useState(0);
-  const [screen, setScreen] = useState<'console' | 'analysis'>(() =>
-    new URLSearchParams(window.location.search).get('screen') === 'analysis' ? 'analysis' : 'console',
-  );
+  const [screen, setScreen] = useState<'console' | 'analysis' | 'programme'>(() => {
+    const requested = new URLSearchParams(window.location.search).get('screen');
+    return requested === 'analysis' || requested === 'programme' ? requested : 'console';
+  });
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastId = useRef(0);
+  const pushToast = useCallback((toast: Omit<Toast, 'id'>) => {
+    setToasts((list) => [...list, { ...toast, id: ++toastId.current }]);
+  }, []);
+  const dismissToast = useCallback((id: number) => setToasts((list) => list.filter((x) => x.id !== id)), []);
   // `?explain=beam|magnets|mass` opens an explainer on load, handy for linking and screenshots.
   const [explainer, setExplainer] = useState<ExplainerTopic | null>(() => {
     const requested = new URLSearchParams(window.location.search).get('explain');
@@ -109,10 +134,97 @@ export function App() {
   runRef.current ??= new CollisionRun(Date.now() >>> 0, undefined, hidden.map(hiddenProcess));
   const run = runRef.current;
   const [catalog, setCatalog] = useState<CatalogEntry[]>(() => loadCatalog());
+  const catalogRef = useRef(catalog);
   const onCatalog = useCallback((entries: CatalogEntry[]) => {
+    // A claim refuted on later data costs reputation, once per claim.
+    const previous = catalogRef.current;
+    const refuted = entries.filter((e) => e.claim?.status === 'refuted' && previous.find((p) => p.id === e.id)?.claim?.status === 'claimed').length;
+    catalogRef.current = entries;
     setCatalog(entries);
     saveCatalog(entries);
+    if (refuted > 0) {
+      setProgress((p) => {
+        const updated = { ...p, falseClaims: p.falseClaims + refuted };
+        saveProgress(updated);
+        return updated;
+      });
+    }
   }, []);
+
+  // Research programme: reputation from levels and missions, the rank it gives, and what the rank opens.
+  const completedSet = useMemo(() => new Set(progress.completed), [progress.completed]);
+  const completedMissions = useMemo(() => new Set(progress.missions), [progress.missions]);
+  const reputation = useMemo(() => reputationOf({ completedLevels: completedSet, completedMissions: progress.missions }), [completedSet, progress.missions]);
+  const rank = useMemo(() => rankFor(reputation), [reputation]);
+  const perks: Perks = rank.perks;
+  const perksRef = useRef(perks);
+  perksRef.current = perks;
+  const missionContext: MissionContext = useMemo(
+    () => ({ catalog, completedLevels: completedSet, falseClaims: progress.falseClaims }),
+    [catalog, completedSet, progress.falseClaims],
+  );
+  useEffect(() => {
+    const fresh = evaluateMissions(missionContext).filter((id) => !completedMissions.has(id));
+    if (fresh.length === 0) return;
+    setProgress((p) => {
+      const updated: Progress = { ...p, missions: [...p.missions, ...fresh.filter((id) => !p.missions.includes(id))] };
+      saveProgress(updated);
+      return updated;
+    });
+    for (const id of fresh) {
+      const mission = missionById(id)!;
+      if (mission.reward < 0) {
+        play('lost');
+        pushToast({ kind: 'penalty', title: t('toast.penalty'), text: t('toast.penaltyText', { title: t(`mission.${id}.title`), n: String(-mission.reward) }) });
+      } else {
+        play('complete');
+        pushToast({ kind: 'mission', title: t('toast.mission'), text: t('toast.missionText', { title: t(`mission.${id}.title`), n: String(mission.reward) }) });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missionContext, completedMissions]);
+  const rankRef = useRef(rank.id);
+  useEffect(() => {
+    if (rankRef.current === rank.id) return;
+    const up = rankIndex(rank.id) > rankIndex(rankRef.current);
+    rankRef.current = rank.id;
+    if (!up) {
+      pushToast({ kind: 'penalty', title: t('toast.rankDown'), text: t('toast.rankDownText', { rank: t(`rank.${rank.id}`) }) });
+      return;
+    }
+    const gain = rankGain(rank);
+    const parts: string[] = [];
+    if (gain.energy) parts.push(t('rank.gain.energy', { tev: String(rank.perks.maxEnergyGeV / 1000) }));
+    if (gain.bunches) parts.push(t('rank.gain.bunches', { n: String(rank.perks.maxBunches) }));
+    if (gain.timeSpeed) {
+      const option = [...TIME_SPEED_OPTIONS].reverse().find((o) => o.factor <= rank.perks.maxTimeSpeed);
+      if (option) parts.push(t('rank.gain.timeSpeed', { speed: t(option.labelKey) }));
+    }
+    for (const c of gain.channels) parts.push(t('rank.gain.channel', { channel: t(`channel.${c}`) }));
+    if (gain.claims) parts.push(t('rank.gain.claims'));
+    play('fiveSigma');
+    pushToast({ kind: 'rank', title: t('toast.rankUp', { rank: t(`rank.${rank.id}`) }), text: parts.join(' · ') });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rank]);
+  const sandbox = level.id === 'sandbox';
+  const following = nextRank(rank);
+  const nextRankLabel = following ? t(`rank.${following.id}`) : null;
+  // Channels closed by rank; the level's own channel and the one in use stay open.
+  const lockedChannels = useMemo(() => {
+    const locked: Partial<Record<Channel, string>> = {};
+    for (const c of CHANNELS) {
+      if (!perks.channels.includes(c) && c !== level.setup.channel && c !== channel) locked[c] = t(`rank.${rankUnlockingChannel(c).id}`);
+    }
+    return locked;
+  }, [perks, level.setup.channel, channel, t]);
+  const claimsAccess = useMemo(() => ({ allowed: perks.claims, rank: t(`rank.${rankUnlockingClaims().id}`) }), [perks, t]);
+  const nextMissions = useMemo(
+    () =>
+      MISSIONS.filter((m) => !completedMissions.has(m.id) && m.reward > 0 && (!m.requiresRank || rankIndex(m.requiresRank) <= rankIndex(rank.id)))
+        .slice(0, 3)
+        .map((m) => ({ id: m.id, reward: m.reward, progress: m.progress ? m.progress(missionContext) : null })),
+    [completedMissions, rank.id, missionContext],
+  );
   // Mass markers on the console histogram: only what this player has recorded or discovered.
   const discoveredMarkers = useMemo(
     () =>
@@ -211,7 +323,7 @@ export function App() {
 
   const resetProgress = useCallback(() => {
     if (!window.confirm(t('tutorial.resetConfirm'))) return;
-    const fresh = { completed: [], currentLevel: 'first-beam' };
+    const fresh = { ...EMPTY_PROGRESS };
     saveProgress(fresh);
     setProgress(fresh);
     applyLevelRef.current?.(levelById('first-beam'));
@@ -225,11 +337,14 @@ export function App() {
 
   const applyLevel = useCallback(
     (next: Level) => {
-      const m = machineForLevel(next);
+      let m = machineForLevel(next);
+      // The sandbox is limited by rank: clamp the machine to what the rank allows.
+      const limits = next.id === 'sandbox' ? perksRef.current : null;
+      if (limits) m = setTargetEnergy(m, Math.min(m.targetEnergyGeV, limits.maxEnergyGeV));
       machineRef.current = m;
       setMachine(m);
-      setTimeSpeed(next.setup.timeSpeed);
-      setBeam(next.setup.beam);
+      setTimeSpeed(limits ? Math.min(next.setup.timeSpeed, limits.maxTimeSpeed) : next.setup.timeSpeed);
+      setBeam(limits ? { ...next.setup.beam, bunches: Math.min(next.setup.beam.bunches, limits.maxBunches) } : next.setup.beam);
       setChannel(next.setup.channel);
       setCutsByChannel({ ...DEFAULT_CUTS, [next.setup.channel]: next.setup.cuts });
       setView(next.setup.view);
@@ -284,8 +399,6 @@ export function App() {
     }
   }, [evaluation, levelStatus, level.id, machine.status]);
 
-  const completedSet = useMemo(() => new Set(progress.completed), [progress.completed]);
-
   const onAnswer = (questionId: string, option: number) => {
     const question = level.quiz.find((q) => q.id === questionId);
     if (!question) return;
@@ -337,7 +450,14 @@ export function App() {
             <button type="button" role="radio" aria-checked={screen === 'analysis'} className={screen === 'analysis' ? 'active' : ''} onClick={() => setScreen('analysis')}>
               {t('nav.analysis')}
             </button>
+            <button type="button" role="radio" aria-checked={screen === 'programme'} className={screen === 'programme' ? 'active' : ''} onClick={() => setScreen('programme')}>
+              {t('nav.programme')}
+            </button>
           </div>
+          <button type="button" className="rank-badge" onClick={() => setScreen('programme')} title={t('programme.open')}>
+            <span className="rank-badge-name">{t(`rank.${rank.id}`)}</span>
+            <span className="rank-badge-points mono">{reputation}</span>
+          </button>
           <button type="button" className="explain-button" onClick={() => setExplainer('glossary')}>
             {t('explainer.glossary.title')}
           </button>
@@ -368,7 +488,13 @@ export function App() {
           hidden={hidden}
           catalog={catalog}
           onCatalog={onCatalog}
+          lockedChannels={lockedChannels}
+          claims={claimsAccess}
         />
+      )}
+
+      {screen === 'programme' && (
+        <ProgrammeScreen reputation={reputation} rank={rank} completedMissions={completedMissions} context={missionContext} onGoTo={setScreen} />
       )}
 
       {screen === 'console' && (
@@ -384,6 +510,8 @@ export function App() {
         onRestart={() => applyLevel(level)}
         onNext={onNext}
         onResetProgress={resetProgress}
+        nextMissions={nextMissions}
+        onOpenProgramme={() => setScreen('programme')}
       />
       )}
 
@@ -403,6 +531,7 @@ export function App() {
           onManualField={(b) => update((s) => setManualField(s, b))}
           onTimeSpeed={setTimeSpeed}
           onExplain={setExplainer}
+          limits={sandbox ? { maxEnergyGeV: perks.maxEnergyGeV, maxTimeSpeed: perks.maxTimeSpeed, nextRank: nextRankLabel } : undefined}
         />
         {visible.readouts && <Readouts machine={machine} />}
         {visible.beam && (
@@ -416,6 +545,7 @@ export function App() {
             locked={!access.beam}
             onBeam={setBeam}
             onExplain={setExplainer}
+            limits={sandbox ? { maxBunches: perks.maxBunches, nextRank: nextRankLabel } : undefined}
           />
         )}
         {visible.histogram && (
@@ -435,6 +565,7 @@ export function App() {
         {visible.histogram && (
           <AnalysisPanel
             access={access}
+            lockedChannels={lockedChannels}
             channel={channel}
             cuts={cuts}
             window={massWindow}
@@ -461,6 +592,8 @@ export function App() {
       )}
 
       <footer className="app-footer">{t('footer.sources')}</footer>
+
+      <Toasts toasts={toasts} onDismiss={dismissToast} />
 
       {explainer && (
         <ExplainerDialog topic={explainer} onClose={closeExplainer}>
