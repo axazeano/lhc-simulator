@@ -3,6 +3,7 @@ import { LHC_MACHINE_CONFIG, type FieldMode, type MachineState } from '../physic
 import type { LevelAccess } from '../tutorial/levels';
 import { Hint } from './Hint';
 import { NumberKnob } from './NumberKnob';
+import { ExplainerButton, type ExplainerTopic } from './explainers/Explainer';
 import { TIME_SPEED_OPTIONS } from './timeSpeed';
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
   onFieldMode(mode: FieldMode): void;
   onManualField(fieldT: number): void;
   onTimeSpeed(factor: number): void;
+  onExplain(topic: ExplainerTopic): void;
 }
 
 const SOURCES = {
@@ -32,7 +34,10 @@ export function ControlPanel(props: Props) {
 
   return (
     <section className="panel controls" aria-labelledby="controls-title">
-      <h2 id="controls-title">{t('controls.title')}</h2>
+      <div className="panel-head">
+        <h2 id="controls-title">{t('controls.title')}</h2>
+        <ExplainerButton topic="magnets" onOpen={props.onExplain} />
+      </div>
 
       <div className="button-row">
         <button type="button" className="primary" onClick={props.onInject} disabled={beamPresent}>

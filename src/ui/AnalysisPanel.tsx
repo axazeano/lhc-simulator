@@ -5,6 +5,7 @@ import type { SelectionCuts } from '../physics/detector/detector';
 import type { LevelAccess } from '../tutorial/levels';
 import { Hint } from './Hint';
 import { NumberKnob } from './NumberKnob';
+import { ExplainerButton, type ExplainerTopic } from './explainers/Explainer';
 
 interface Props {
   access: Pick<LevelAccess, 'ptCut' | 'massWindow' | 'channel'>;
@@ -23,6 +24,7 @@ interface Props {
   onLogScale(value: boolean): void;
   onShowKnownMasses(value: boolean): void;
   onReset(): void;
+  onExplain(topic: ExplainerTopic): void;
 }
 
 export interface ViewPreset {
@@ -74,7 +76,10 @@ export function AnalysisPanel(props: Props) {
 
   return (
     <section className="panel analysis" aria-labelledby="analysis-title">
-      <h2 id="analysis-title">{t('analysis.titleChannel', { channel: t(`channel.${channel}`) })}</h2>
+      <div className="panel-head">
+        <h2 id="analysis-title">{t('analysis.titleChannel', { channel: t(`channel.${channel}`) })}</h2>
+        <ExplainerButton topic="mass" onOpen={props.onExplain} />
+      </div>
 
       <div className={`knob-head ${access.channel ? '' : 'locked'}`} title={access.channel ? undefined : lockTitle}>
         <span>{t('analysis.channel')}</span>

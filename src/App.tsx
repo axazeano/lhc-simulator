@@ -30,6 +30,10 @@ import { HistogramCanvas } from './ui/HistogramCanvas';
 import { Readouts } from './ui/Readouts';
 import { RingCanvas } from './ui/RingCanvas';
 import { TutorialPanel } from './ui/TutorialPanel';
+import { ExplainerDialog, type ExplainerTopic } from './ui/explainers/Explainer';
+import { BeamExplainer } from './ui/explainers/BeamExplainer';
+import { MagnetExplainer } from './ui/explainers/MagnetExplainer';
+import { MassExplainer } from './ui/explainers/MassExplainer';
 
 /** Collisions happen whenever a beam is circulating and not being ramped. */
 function isColliding(machine: MachineState): boolean {
@@ -67,6 +71,12 @@ export function App() {
   const [logScale, setLogScale] = useState(true);
   const [showKnownMasses, setShowKnownMasses] = useState(false);
   const [runVersion, setRunVersion] = useState(0);
+  // `?explain=beam|magnets|mass` opens an explainer on load, handy for linking and screenshots.
+  const [explainer, setExplainer] = useState<ExplainerTopic | null>(() => {
+    const requested = new URLSearchParams(window.location.search).get('explain');
+    return requested === 'beam' || requested === 'magnets' || requested === 'mass' ? requested : null;
+  });
+  const closeExplainer = useCallback(() => setExplainer(null), []);
 
   // The simulation loop reads the latest state through refs so that actions and ticks never race.
   const machineRef = useRef(machine);
@@ -293,6 +303,7 @@ export function App() {
           onFieldMode={(mode: FieldMode) => update((s) => setFieldMode(s, mode))}
           onManualField={(b) => update((s) => setManualField(s, b))}
           onTimeSpeed={setTimeSpeed}
+          onExplain={setExplainer}
         />
         {visible.readouts && <Readouts machine={machine} />}
         {visible.beam && (
@@ -305,6 +316,7 @@ export function App() {
             collisions={snapshot.collisions}
             locked={!access.beam}
             onBeam={setBeam}
+            onExplain={setExplainer}
           />
         )}
         {visible.histogram && (
@@ -341,11 +353,22 @@ export function App() {
             onLogScale={setLogScale}
             onShowKnownMasses={setShowKnownMasses}
             onReset={resetRun}
+            onExplain={setExplainer}
           />
         )}
       </main>
 
       <footer className="app-footer">{t('footer.sources')}</footer>
+
+      {explainer && (
+        <ExplainerDialog topic={explainer} onClose={closeExplainer}>
+          {explainer === 'beam' && (
+            <BeamExplainer beam={beam} energyGeV={machine.status === 'empty' ? config.injectionEnergyGeV : machine.energyGeV} />
+          )}
+          {explainer === 'magnets' && <MagnetExplainer machine={machine} />}
+          {explainer === 'mass' && <MassExplainer channel={channel} />}
+        </ExplainerDialog>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { LHC } from '../data/lhc';
 import type { BeamParameters } from '../physics/accelerator';
 import { Hint } from './Hint';
 import { NumberKnob } from './NumberKnob';
+import { ExplainerButton, type ExplainerTopic } from './explainers/Explainer';
 import { integratedLuminosityDisplay } from './units';
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
   collisions: number;
   locked: boolean;
   onBeam(beam: BeamParameters): void;
+  onExplain(topic: ExplainerTopic): void;
 }
 
 const SOURCES = {
@@ -38,7 +40,10 @@ export function BeamPanel(props: Props) {
 
   return (
     <section className="panel beam" aria-labelledby="beam-title">
-      <h2 id="beam-title">{t('beam.title')}</h2>
+      <div className="panel-head">
+        <h2 id="beam-title">{t('beam.title')}</h2>
+        <ExplainerButton topic="beam" onOpen={props.onExplain} />
+      </div>
       <p className={`status ${props.colliding ? 'status-stable' : 'status-empty'}`}>
         {props.colliding ? t('beam.colliding') : t('beam.notColliding')}
       </p>
