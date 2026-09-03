@@ -1,11 +1,13 @@
 import { useI18n } from '../i18n/I18nProvider';
 import type { WindowAnalysis, MassWindow } from '../physics/analysis/window';
+import { CHANNELS, CHANNEL_DEFINITIONS, type Channel } from '../physics/collision/channels';
 import type { SelectionCuts } from '../physics/detector/detector';
-import { Hint } from './Hint';
 import type { LevelAccess } from '../tutorial/levels';
+import { Hint } from './Hint';
 
 interface Props {
-  access: Pick<LevelAccess, 'ptCut' | 'massWindow'>;
+  access: Pick<LevelAccess, 'ptCut' | 'massWindow' | 'channel'>;
+  channel: Channel;
   cuts: SelectionCuts;
   window: MassWindow;
   view: MassWindow;
@@ -13,6 +15,7 @@ interface Props {
   showKnownMasses: boolean;
   entries: number;
   analysis: WindowAnalysis;
+  onChannel(channel: Channel): void;
   onCuts(cuts: SelectionCuts): void;
   onWindow(window: MassWindow): void;
   onView(view: MassWindow, window?: MassWindow): void;
@@ -21,23 +24,43 @@ interface Props {
   onReset(): void;
 }
 
-export const VIEW_PRESETS: { key: string; view: MassWindow; window: MassWindow }[] = [
-  { key: 'analysis.view.all', view: { minGeV: 2, maxGeV: 200 }, window: { minGeV: 2.9, maxGeV: 3.3 } },
-  { key: 'analysis.view.jpsi', view: { minGeV: 2.6, maxGeV: 3.6 }, window: { minGeV: 3.0, maxGeV: 3.2 } },
-  { key: 'analysis.view.upsilon', view: { minGeV: 8.5, maxGeV: 11 }, window: { minGeV: 9.25, maxGeV: 9.65 } },
-  { key: 'analysis.view.z', view: { minGeV: 60, maxGeV: 120 }, window: { minGeV: 84, maxGeV: 98 } },
-];
+export interface ViewPreset {
+  key: string;
+  view: MassWindow;
+  window: MassWindow;
+}
+
+export const VIEW_PRESETS: Record<Channel, ViewPreset[]> = {
+  mumu: [
+    { key: 'analysis.view.all', view: { minGeV: 2, maxGeV: 200 }, window: { minGeV: 2.9, maxGeV: 3.3 } },
+    { key: 'analysis.view.jpsi', view: { minGeV: 2.6, maxGeV: 3.6 }, window: { minGeV: 3.0, maxGeV: 3.2 } },
+    { key: 'analysis.view.upsilon', view: { minGeV: 8.5, maxGeV: 11 }, window: { minGeV: 9.25, maxGeV: 9.65 } },
+    { key: 'analysis.view.z', view: { minGeV: 60, maxGeV: 120 }, window: { minGeV: 84, maxGeV: 98 } },
+  ],
+  gammagamma: [
+    { key: 'analysis.view.gg.all', view: { minGeV: 80, maxGeV: 200 }, window: { minGeV: 121, maxGeV: 129 } },
+    { key: 'analysis.view.gg.higgs', view: { minGeV: 100, maxGeV: 160 }, window: { minGeV: 121, maxGeV: 129 } },
+  ],
+  fourlepton: [
+    { key: 'analysis.view.fl.all', view: { minGeV: 70, maxGeV: 400 }, window: { minGeV: 118, maxGeV: 132 } },
+    { key: 'analysis.view.fl.z', view: { minGeV: 80, maxGeV: 100 }, window: { minGeV: 88, maxGeV: 94 } },
+    { key: 'analysis.view.fl.higgs', view: { minGeV: 110, maxGeV: 140 }, window: { minGeV: 118, maxGeV: 132 } },
+  ],
+};
 
 const SOURCES = {
   histogram: 'https://en.wikipedia.org/wiki/Invariant_mass',
   window: 'https://en.wikipedia.org/wiki/Statistical_significance',
   ptCut: 'https://en.wikipedia.org/wiki/Transverse_momentum',
+  channel: 'https://en.wikipedia.org/wiki/Higgs_boson#Decay',
 };
 
 export function AnalysisPanel(props: Props) {
   const { t, number } = useI18n();
-  const { analysis, access } = props;
+  const { analysis, access, channel } = props;
   const lockTitle = t('tutorial.lockedKnob');
+  const definition = CHANNEL_DEFINITIONS[channel];
+  const presets = VIEW_PRESETS[channel];
 
   const row = (label: string, value: string, className = '') => (
     <div className={`readout ${className}`}>
@@ -50,12 +73,32 @@ export function AnalysisPanel(props: Props) {
 
   return (
     <section className="panel analysis" aria-labelledby="analysis-title">
-      <h2 id="analysis-title">{t('analysis.title')}</h2>
+      <h2 id="analysis-title">{t('analysis.titleChannel', { channel: t(`channel.${channel}`) })}</h2>
+
+      <div className={`knob-head ${access.channel ? '' : 'locked'}`} title={access.channel ? undefined : lockTitle}>
+        <span>{t('analysis.channel')}</span>
+        <div className="segmented" role="radiogroup" aria-label={t('analysis.channel')}>
+          {CHANNELS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={channel === c}
+              className={channel === c ? 'active' : ''}
+              disabled={!access.channel}
+              onClick={() => props.onChannel(c)}
+            >
+              {t(`channel.${c}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Hint textKey="hint.channel.what" href={SOURCES.channel} />
 
       <div className="knob-head">
         <span>{t('analysis.view')}</span>
         <div className="segmented" role="group">
-          {VIEW_PRESETS.map((preset) => (
+          {presets.map((preset) => (
             <button
               key={preset.key}
               type="button"
@@ -92,8 +135,8 @@ export function AnalysisPanel(props: Props) {
               <input
                 type="number"
                 step="0.05"
-                min={2}
-                max={200}
+                min={definition.spec.min}
+                max={definition.spec.max}
                 value={props.window.minGeV}
                 disabled={!access.massWindow}
                 onChange={(e) => props.onWindow({ ...props.window, minGeV: Number(e.target.value) })}
@@ -104,8 +147,8 @@ export function AnalysisPanel(props: Props) {
               <input
                 type="number"
                 step="0.05"
-                min={2}
-                max={200}
+                min={definition.spec.min}
+                max={definition.spec.max}
                 value={props.window.maxGeV}
                 disabled={!access.massWindow}
                 onChange={(e) => props.onWindow({ ...props.window, maxGeV: Number(e.target.value) })}
@@ -118,20 +161,20 @@ export function AnalysisPanel(props: Props) {
 
       <div className={`knob ${access.ptCut ? '' : 'locked'}`} title={access.ptCut ? undefined : lockTitle}>
         <div className="knob-head">
-          <label htmlFor="pt-cut">{t('analysis.ptCut')}</label>
+          <label htmlFor="pt-cut">{channel === 'mumu' ? t('analysis.ptCut') : t('analysis.ptCutParticle')}</label>
           <output htmlFor="pt-cut" className="mono">
-            {number(props.cuts.muonPtMinGeV)} {t('unit.GeV')}
+            {number(props.cuts.ptMinGeV)} {t('unit.GeV')}
           </output>
         </div>
         <input
           id="pt-cut"
           type="range"
-          min={3}
-          max={50}
+          min={definition.ptMinRange[0]}
+          max={definition.ptMinRange[1]}
           step={1}
-          value={props.cuts.muonPtMinGeV}
+          value={props.cuts.ptMinGeV}
           disabled={!access.ptCut}
-          onChange={(e) => props.onCuts({ muonPtMinGeV: Number(e.target.value) })}
+          onChange={(e) => props.onCuts({ ptMinGeV: Number(e.target.value) })}
         />
         <p className="note">{t('analysis.resetNote')}</p>
         <Hint textKey="hint.ptCut.what" href={SOURCES.ptCut} />

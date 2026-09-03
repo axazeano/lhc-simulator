@@ -1,11 +1,12 @@
 import { Histogram, type HistogramSpec } from '../analysis/histogram';
-import { DEFAULT_DETECTOR, reconstructPairMass, type DetectorModel, type SelectionCuts } from '../detector/detector';
+import { DEFAULT_DETECTOR, reconstructEventMass, type DetectorModel, type SelectionCuts } from '../detector/detector';
 import { Random } from '../random';
+import { CHANNELS, CHANNEL_DEFINITIONS, type Channel } from './channels';
 import { generateEvent, generateWeightedEvent } from './generator';
 import { PROCESSES, crossSectionNb, expectedCount, type ProcessDefinition } from './processes';
 
 /**
- * A data-taking run: turns integrated luminosity into a dimuon mass histogram.
+ * A data-taking run: turns integrated luminosity into invariant-mass histograms, one per channel.
  *
  * Two regimes keep it honest and fast:
  * - When a process is expected to produce only a handful of events in a step, every event is
@@ -15,7 +16,7 @@ import { PROCESSES, crossSectionNb, expectedCount, type ProcessDefinition } from
  *   Poisson-distributed counts per bin. Statistically this is the same as simulating each event.
  */
 
-export const DIMUON_HISTOGRAM: HistogramSpec = { min: 2, max: 200, bins: 9900 };
+export const DIMUON_HISTOGRAM: HistogramSpec = CHANNEL_DEFINITIONS.mumu.spec;
 
 /** Below this expected count per step, events are simulated one by one. */
 const INDIVIDUAL_LIMIT = 300;
@@ -38,16 +39,28 @@ interface Template {
   nonZeroBins: Int32Array;
 }
 
+export type CutsByChannel = Record<Channel, SelectionCuts>;
+
+export const DEFAULT_CUTS: CutsByChannel = {
+  mumu: { ptMinGeV: CHANNEL_DEFINITIONS.mumu.defaultPtMinGeV },
+  gammagamma: { ptMinGeV: CHANNEL_DEFINITIONS.gammagamma.defaultPtMinGeV },
+  fourlepton: { ptMinGeV: CHANNEL_DEFINITIONS.fourlepton.defaultPtMinGeV },
+};
+
 export interface RunSnapshot {
   integratedLuminosityM2: number;
   collisions: number;
   visibleByProcess: Record<string, number>;
   simulatedEvents: number;
-  entries: number;
+  entriesByChannel: Record<Channel, number>;
+}
+
+function channelOf(process: ProcessDefinition): Channel | null {
+  return process.finalState ?? null;
 }
 
 export class CollisionRun {
-  readonly histogram: Histogram;
+  readonly histograms: Record<Channel, Histogram>;
   integratedLuminosityM2 = 0;
   collisions = 0;
   simulatedEvents = 0;
@@ -55,17 +68,34 @@ export class CollisionRun {
   private readonly rng: Random;
   private readonly templates = new Map<string, Template>();
 
-  constructor(seed = 12345, spec: HistogramSpec = DIMUON_HISTOGRAM) {
+  constructor(seed = 12345) {
     this.rng = new Random(seed);
-    this.histogram = new Histogram(spec);
+    this.histograms = {
+      mumu: new Histogram(CHANNEL_DEFINITIONS.mumu.spec),
+      gammagamma: new Histogram(CHANNEL_DEFINITIONS.gammagamma.spec),
+      fourlepton: new Histogram(CHANNEL_DEFINITIONS.fourlepton.spec),
+    };
+  }
+
+  /** The dimuon histogram, kept for convenience. */
+  get histogram(): Histogram {
+    return this.histograms.mumu;
   }
 
   reset(): void {
-    this.histogram.reset();
+    for (const channel of CHANNELS) this.histograms[channel].reset();
     this.integratedLuminosityM2 = 0;
     this.collisions = 0;
     this.simulatedEvents = 0;
     this.visibleByProcess = {};
+  }
+
+  /** Clear one channel's data, as if that trigger had just been reconfigured. */
+  resetChannel(channel: Channel): void {
+    this.histograms[channel].reset();
+    for (const process of PROCESSES) {
+      if (channelOf(process) === channel) delete this.visibleByProcess[process.id];
+    }
   }
 
   snapshot(): RunSnapshot {
@@ -74,15 +104,19 @@ export class CollisionRun {
       collisions: this.collisions,
       visibleByProcess: { ...this.visibleByProcess },
       simulatedEvents: this.simulatedEvents,
-      entries: this.histogram.entries,
+      entriesByChannel: {
+        mumu: this.histograms.mumu.entries,
+        gammagamma: this.histograms.gammagamma.entries,
+        fourlepton: this.histograms.fourlepton.entries,
+      },
     };
   }
 
-  /** Record `deltaLuminosityM2` of collisions at √s with the given selection. */
+  /** Record `deltaLuminosityM2` of collisions at √s with the given selection per channel. */
   collect(
     deltaLuminosityM2: number,
     sqrtSGeV: number,
-    cuts: SelectionCuts,
+    cuts: CutsByChannel = DEFAULT_CUTS,
     detector: DetectorModel = DEFAULT_DETECTOR,
   ): void {
     if (deltaLuminosityM2 <= 0) return;
@@ -95,10 +129,13 @@ export class CollisionRun {
         this.collisions += expected;
         continue;
       }
+      const channel = channelOf(process);
+      if (!channel) continue;
+      const channelCuts = cuts[channel];
       if (expected < INDIVIDUAL_LIMIT) {
-        this.collectIndividually(process, expected, sqrtSGeV, cuts, detector);
+        this.collectIndividually(process, channel, expected, sqrtSGeV, channelCuts, detector);
       } else {
-        this.collectFromTemplate(process, expected, sqrtSGeV, cuts, detector);
+        this.collectFromTemplate(process, channel, expected, sqrtSGeV, channelCuts, detector);
       }
     }
   }
@@ -109,39 +146,43 @@ export class CollisionRun {
 
   private collectIndividually(
     process: ProcessDefinition,
+    channel: Channel,
     expected: number,
     sqrtSGeV: number,
     cuts: SelectionCuts,
     detector: DetectorModel,
   ): void {
     const n = this.rng.poisson(expected);
+    const histogram = this.histograms[channel];
     for (let i = 0; i < n; i++) {
       const event = generateEvent(process, sqrtSGeV, this.rng);
-      const mass = reconstructPairMass(event.daughters, detector, cuts, this.rng);
+      const mass = reconstructEventMass(event.daughters, event.kinds, detector, cuts, this.rng);
       this.simulatedEvents += 1;
       if (mass === null) continue;
-      this.histogram.fill(mass);
+      histogram.fill(mass);
       this.addVisible(process.id, 1);
     }
   }
 
   private collectFromTemplate(
     process: ProcessDefinition,
+    channel: Channel,
     expected: number,
     sqrtSGeV: number,
     cuts: SelectionCuts,
     detector: DetectorModel,
   ): void {
-    const template = this.template(process, sqrtSGeV, cuts, detector);
+    const template = this.template(process, channel, sqrtSGeV, cuts, detector);
     const visibleExpected = expected * template.acceptance;
     if (visibleExpected <= 0) return;
+    const histogram = this.histograms[channel];
     let total = 0;
     for (let i = 0; i < template.nonZeroBins.length; i++) {
       const bin = template.nonZeroBins[i]!;
       const lambda = visibleExpected * template.fractions[bin]!;
       const count = this.rng.poisson(lambda);
       if (count > 0) {
-        this.histogram.addCounts(bin, count);
+        histogram.addCounts(bin, count);
         total += count;
       }
     }
@@ -150,14 +191,15 @@ export class CollisionRun {
 
   private template(
     process: ProcessDefinition,
+    channel: Channel,
     sqrtSGeV: number,
     cuts: SelectionCuts,
     detector: DetectorModel,
   ): Template {
-    const key = `${process.id}|${Number(sqrtSGeV.toPrecision(3))}|${cuts.muonPtMinGeV}`;
+    const key = `${process.id}|${Number(sqrtSGeV.toPrecision(3))}|${cuts.ptMinGeV}`;
     const cached = this.templates.get(key);
     if (cached) return cached;
-    const built = buildTemplate(process, sqrtSGeV, cuts, detector, this.histogram.spec, new Random(hashKey(key)));
+    const built = buildTemplate(process, sqrtSGeV, cuts, detector, this.histograms[channel].spec, new Random(hashKey(key)));
     this.templates.set(key, built);
     return built;
   }
@@ -191,7 +233,7 @@ export function buildTemplate(
   while (samples < maxSamples && accepted < target) {
     samples += 1;
     const event = generateWeightedEvent(process, sqrtSGeV, rng);
-    const mass = reconstructPairMass(event.daughters, detector, cuts, rng);
+    const mass = reconstructEventMass(event.daughters, event.kinds, detector, cuts, rng);
     if (mass === null) continue;
     accepted += 1;
     acceptedWeight += event.weight;

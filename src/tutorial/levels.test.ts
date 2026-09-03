@@ -11,18 +11,26 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     beam: LHC_DESIGN_BEAM,
     luminosityCm2S: null,
     colliding: false,
-    run: { integratedLuminosityM2: 0, collisions: 0, visibleByProcess: {}, simulatedEvents: 0, entries: 0 },
+    run: {
+      integratedLuminosityM2: 0,
+      collisions: 0,
+      visibleByProcess: {},
+      simulatedEvents: 0,
+      entriesByChannel: { mumu: 0, gammagamma: 0, fourlepton: 0 },
+    },
+    channel: 'mumu',
     analysis: analyseWindow(h, { minGeV: 3, maxGeV: 3.2 }),
     window: { minGeV: 3, maxGeV: 3.2 },
-    cuts: { muonPtMinGeV: 3 },
+    cuts: { ptMinGeV: 3 },
+    integratedLuminosityFb: 0,
     quizCorrect: new Set(),
     ...overrides,
   };
 }
 
 describe('tutorial levels', () => {
-  it('has six levels plus a sandbox, each with texts and a source link', () => {
-    expect(LEVELS).toHaveLength(6);
+  it('has eight levels plus a sandbox, each with texts and a source link', () => {
+    expect(LEVELS).toHaveLength(8);
     for (const level of [...LEVELS, SANDBOX]) {
       expect(level.cardHref).toMatch(/^https:\/\//);
       expect(level.titleKey).toContain(level.id);
@@ -68,6 +76,26 @@ describe('tutorial levels', () => {
     expect(evaluateLevel(level, good).completed).toBe(true);
     const off = { minGeV: 20, maxGeV: 30 };
     expect(evaluateLevel(level, snapshot({ analysis: analyseWindow(h, off), window: off })).completed).toBe(false);
+  });
+
+  it('Higgs → γγ: needs the diphoton channel, a window on 125 GeV, five sigma and the budget', () => {
+    const level = levelById('higgs-gammagamma');
+    const h = new Histogram({ min: 80, max: 200, bins: 2400 });
+    for (let b = 0; b < 2400; b++) h.addCounts(b, 20); // flat background 400 per GeV
+    for (let b = h.binOf(123); b < h.binOf(127); b++) h.addCounts(b, 50); // 4000 signal events
+    const window = { minGeV: 121, maxGeV: 129 };
+    const good = snapshot({
+      channel: 'gammagamma',
+      analysis: analyseWindow(h, window),
+      window,
+      integratedLuminosityFb: 12,
+      quizCorrect: new Set(['five-sigma']),
+    });
+    expect(evaluateLevel(level, good).completed).toBe(true);
+    expect(evaluateLevel(level, { ...good, channel: 'mumu' }).completed).toBe(false);
+    const overBudget = { ...good, integratedLuminosityFb: 31 };
+    expect(evaluateLevel(level, overBudget).failed).toBe(true);
+    expect(level.failureKey).toBe('tutorial.budgetExceeded');
   });
 
   it('sandbox never completes', () => {

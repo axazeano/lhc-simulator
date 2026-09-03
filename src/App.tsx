@@ -19,11 +19,11 @@ import {
   type MachineState,
 } from './physics/accelerator';
 import { analyseWindow, type MassWindow } from './physics/analysis/window';
-import { CollisionRun, crossSectionNb, processById } from './physics/collision';
+import { CollisionRun, DEFAULT_CUTS, crossSectionNb, processById, type Channel, type CutsByChannel } from './physics/collision';
 import type { SelectionCuts } from './physics/detector/detector';
 import { evaluateLevel, levelById, type Level, type LevelStatus, type Snapshot } from './tutorial/levels';
 import { loadProgress, saveProgress } from './tutorial/progress';
-import { AnalysisPanel } from './ui/AnalysisPanel';
+import { AnalysisPanel, VIEW_PRESETS } from './ui/AnalysisPanel';
 import { BeamPanel } from './ui/BeamPanel';
 import { ControlPanel } from './ui/ControlPanel';
 import { HistogramCanvas } from './ui/HistogramCanvas';
@@ -57,7 +57,11 @@ export function App() {
   const [machine, setMachine] = useState<MachineState>(() => machineForLevel(level));
   const [timeSpeed, setTimeSpeed] = useState(level.setup.timeSpeed);
   const [beam, setBeam] = useState<BeamParameters>(level.setup.beam);
-  const [cuts, setCuts] = useState<SelectionCuts>(level.setup.cuts);
+  const [channel, setChannel] = useState<Channel>(level.setup.channel);
+  const [cutsByChannel, setCutsByChannel] = useState<CutsByChannel>(() => ({
+    ...DEFAULT_CUTS,
+    [level.setup.channel]: level.setup.cuts,
+  }));
   const [view, setView] = useState<MassWindow>(level.setup.view);
   const [massWindow, setMassWindow] = useState<MassWindow>(level.setup.window);
   const [logScale, setLogScale] = useState(true);
@@ -68,10 +72,10 @@ export function App() {
   const machineRef = useRef(machine);
   const timeSpeedRef = useRef(timeSpeed);
   const beamRef = useRef(beam);
-  const cutsRef = useRef(cuts);
+  const cutsRef = useRef(cutsByChannel);
   timeSpeedRef.current = timeSpeed;
   beamRef.current = beam;
-  cutsRef.current = cuts;
+  cutsRef.current = cutsByChannel;
   const runRef = useRef<CollisionRun | null>(null);
   runRef.current ??= new CollisionRun(Date.now() >>> 0);
   const run = runRef.current;
@@ -136,7 +140,9 @@ export function App() {
 
   // Readouts of the run are derived on every version bump (about ten times per second).
   const snapshot = useMemo(() => run.snapshot(), [run, runVersion]);
-  const analysis = useMemo(() => analyseWindow(run.histogram, massWindow), [run, runVersion, massWindow]);
+  const histogram = run.histograms[channel];
+  const analysis = useMemo(() => analyseWindow(histogram, massWindow), [histogram, runVersion, massWindow]);
+  const cuts = cutsByChannel[channel];
 
   const resetRun = useCallback(() => {
     run.reset();
@@ -150,7 +156,8 @@ export function App() {
       setMachine(m);
       setTimeSpeed(next.setup.timeSpeed);
       setBeam(next.setup.beam);
-      setCuts(next.setup.cuts);
+      setChannel(next.setup.channel);
+      setCutsByChannel({ ...DEFAULT_CUTS, [next.setup.channel]: next.setup.cuts });
       setView(next.setup.view);
       setMassWindow(next.setup.window);
       setQuizCorrect(new Set());
@@ -168,8 +175,20 @@ export function App() {
   );
 
   const levelSnapshot: Snapshot = useMemo(
-    () => ({ machine, beam, luminosityCm2S, colliding, run: snapshot, analysis, window: massWindow, cuts, quizCorrect }),
-    [machine, beam, luminosityCm2S, colliding, snapshot, analysis, massWindow, cuts, quizCorrect],
+    () => ({
+      machine,
+      beam,
+      luminosityCm2S,
+      colliding,
+      run: snapshot,
+      channel,
+      analysis,
+      window: massWindow,
+      cuts,
+      integratedLuminosityFb: snapshot.integratedLuminosityM2 / 1e43,
+      quizCorrect,
+    }),
+    [machine, beam, luminosityCm2S, colliding, snapshot, channel, analysis, massWindow, cuts, quizCorrect],
   );
   const evaluation = useMemo(() => evaluateLevel(level, levelSnapshot), [level, levelSnapshot]);
 
@@ -206,15 +225,24 @@ export function App() {
   };
 
   const onNext = () => {
-    const ids = ['first-beam', 'ramp', 'why-collider', 'luminosity', 'first-peak', 'z-boson', 'sandbox'];
+    const ids = ['first-beam', 'ramp', 'why-collider', 'luminosity', 'first-peak', 'z-boson', 'higgs-gammagamma', 'four-leptons', 'sandbox'];
     const i = ids.indexOf(level.id);
     const nextId = ids[i + 1];
     if (nextId) applyLevel(levelById(nextId));
   };
 
   const onCuts = (next: SelectionCuts) => {
-    setCuts(next);
-    resetRun();
+    setCutsByChannel((c) => ({ ...c, [channel]: next }));
+    run.resetChannel(channel);
+    setRunVersion((v) => v + 1);
+  };
+
+  const onChannel = (next: Channel) => {
+    if (next === channel) return;
+    setChannel(next);
+    const preset = VIEW_PRESETS[next][0]!;
+    setView(preset.view);
+    setMassWindow(preset.window);
   };
 
   const { access, visible } = level;
@@ -282,7 +310,8 @@ export function App() {
         {visible.histogram && (
           <div className="histogram-panel panel">
             <HistogramCanvas
-              histogram={run.histogram}
+              histogram={histogram}
+              channel={channel}
               version={runVersion}
               view={view}
               window={massWindow}
@@ -294,13 +323,15 @@ export function App() {
         {visible.histogram && (
           <AnalysisPanel
             access={access}
+            channel={channel}
             cuts={cuts}
             window={massWindow}
             view={view}
             logScale={logScale}
             showKnownMasses={showKnownMasses}
-            entries={snapshot.entries}
+            entries={snapshot.entriesByChannel[channel]}
             analysis={analysis}
+            onChannel={onChannel}
             onCuts={onCuts}
             onWindow={setMassWindow}
             onView={(nextView, nextWindow) => {

@@ -3,7 +3,8 @@ import { PARTICLES } from '../../data/particles';
 import { generateEvent } from '../collision/generator';
 import { processById } from '../collision/processes';
 import { Random } from '../random';
-import { DEFAULT_DETECTOR, muonPtResolution, reconstructPairMass } from './detector';
+import { DEFAULT_DETECTOR, muonPtResolution, reconstructEventMass, reconstructPairMass } from './detector';
+import type { FourVector } from '../fourvector';
 
 function reconstructMany(processId: string, sqrtS: number, ptMin: number, n: number, seed: number): number[] {
   const rng = new Random(seed);
@@ -11,7 +12,7 @@ function reconstructMany(processId: string, sqrtS: number, ptMin: number, n: num
   const masses: number[] = [];
   for (let i = 0; i < n; i++) {
     const event = generateEvent(process, sqrtS, rng);
-    const m = reconstructPairMass(event.daughters, DEFAULT_DETECTOR, { muonPtMinGeV: ptMin }, rng);
+    const m = reconstructPairMass(event.daughters as [FourVector, FourVector], DEFAULT_DETECTOR, { ptMinGeV: ptMin }, rng);
     if (m !== null) masses.push(m);
   }
   return masses.sort((a, b) => a - b);
@@ -51,5 +52,42 @@ describe('detector model', () => {
   it('a high pT cut removes the J/ψ entirely', () => {
     const masses = reconstructMany('jpsi_mumu', 13000, 50, 2000, 24);
     expect(masses.length).toBe(0);
+  });
+
+  it('reconstructs H → γγ with about one per cent mass resolution', () => {
+    const rng = new Random(25);
+    const process = processById('higgs_gammagamma');
+    const masses: number[] = [];
+    for (let i = 0; i < 4000; i++) {
+      const event = generateEvent(process, 13000, rng);
+      const m = reconstructEventMass(event.daughters, event.kinds, DEFAULT_DETECTOR, { ptMinGeV: 30 }, rng);
+      if (m !== null) masses.push(m);
+    }
+    masses.sort((a, b) => a - b);
+    expect(masses.length / 4000).toBeGreaterThan(0.2);
+    const median = masses[Math.floor(masses.length / 2)]!;
+    expect(median).toBeCloseTo(PARTICLES.higgs.massGeV, 0);
+    const q1 = masses[Math.floor(masses.length * 0.25)]!;
+    const q3 = masses[Math.floor(masses.length * 0.75)]!;
+    expect((q3 - q1) / 1.35).toBeLessThan(2.5);
+    expect((q3 - q1) / 1.35).toBeGreaterThan(0.5);
+  });
+
+  it('reconstructs H → ZZ* → 4ℓ with a peak at the Higgs mass and modest acceptance', () => {
+    const rng = new Random(26);
+    const process = processById('higgs_fourlepton');
+    const masses: number[] = [];
+    for (let i = 0; i < 4000; i++) {
+      const event = generateEvent(process, 13000, rng);
+      expect(event.daughters).toHaveLength(4);
+      const m = reconstructEventMass(event.daughters, event.kinds, DEFAULT_DETECTOR, { ptMinGeV: 7 }, rng);
+      if (m !== null) masses.push(m);
+    }
+    masses.sort((a, b) => a - b);
+    const acceptance = masses.length / 4000;
+    expect(acceptance).toBeGreaterThan(0.1);
+    expect(acceptance).toBeLessThan(0.7);
+    const median = masses[Math.floor(masses.length / 2)]!;
+    expect(median).toBeCloseTo(PARTICLES.higgs.massGeV, 0);
   });
 });

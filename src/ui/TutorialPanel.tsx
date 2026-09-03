@@ -101,7 +101,7 @@ export function TutorialPanel(props: Props) {
 
         {status === 'failed' && (
           <div className="level-status failed">
-            <p>{t('tutorial.failed')}</p>
+            <p>{t(level.failureKey ?? 'tutorial.failed')}</p>
             <button type="button" className="primary" onClick={props.onRestart}>
               {t('tutorial.retry')}
             </button>

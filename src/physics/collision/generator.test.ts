@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PARTICLES } from '../../data/particles';
 import { invariantMass, rapidity } from '../fourvector';
 import { Random } from '../random';
-import { generateEvent, generateWeightedEvent, parentOf, powerLawMassDensity, powerLawPtDensity, samplePowerLawPt } from './generator';
+import { generateEvent, generateWeightedEvent, parentOf, powerLawMassDensity, powerLawPtDensity, samplePowerLawPt, sampleZPairMasses } from './generator';
 import { transverseMomentum } from '../fourvector';
 import { processById } from './processes';
 
@@ -103,5 +103,26 @@ describe('event generator', () => {
     expect(weighted / n).toBeCloseTo(trueFraction, 3);
     // The sampler puts far more events above 60 GeV than the true distribution would.
     expect(above60 / n).toBeGreaterThan(50 * trueFraction);
+  });
+
+  it('the ZZ* chain conserves the parent mass and keeps pair masses in range', () => {
+    const rng = new Random(18);
+    const higgs = processById('higgs_fourlepton');
+    for (let i = 0; i < 200; i++) {
+      const event = generateEvent(higgs, 13000, rng);
+      expect(event.daughters).toHaveLength(4);
+      expect(invariantMass(parentOf(event))).toBeCloseTo(event.massGeV, 5);
+      const [m1, m2] = sampleZPairMasses(125.2, rng);
+      expect(m1 + m2).toBeLessThanOrEqual(125.2 + 1e-9);
+      expect(m1).toBeGreaterThanOrEqual(12);
+      expect(m2).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it('photons are massless', () => {
+    const rng = new Random(19);
+    const event = generateEvent(processById('higgs_gammagamma'), 13000, rng);
+    expect(event.kinds).toEqual(['photon', 'photon']);
+    for (const d of event.daughters) expect(invariantMass(d)).toBeLessThan(1e-3);
   });
 });

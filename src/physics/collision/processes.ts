@@ -8,7 +8,7 @@ import { PARTICLES, type ParticleId } from '../../data/particles';
  * Below the first table point it falls linearly to zero at the kinematic threshold.
  */
 
-export type FinalState = 'mumu';
+export type FinalState = 'mumu' | 'gammagamma' | 'fourlepton';
 export type ProcessKind = 'inelastic' | 'resonance' | 'continuum';
 
 export interface ProcessDefinition {

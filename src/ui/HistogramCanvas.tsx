@@ -3,9 +3,11 @@ import { PARTICLES } from '../data/particles';
 import { useI18n } from '../i18n/I18nProvider';
 import type { Histogram } from '../physics/analysis/histogram';
 import type { MassWindow } from '../physics/analysis/window';
+import type { Channel } from '../physics/collision/channels';
 
 interface Props {
   histogram: Histogram;
+  channel: Channel;
   /** Bumped by the owner whenever the histogram content changed. */
   version: number;
   view: MassWindow;
@@ -14,13 +16,20 @@ interface Props {
   showKnownMasses: boolean;
 }
 
-const KNOWN = [
-  { label: 'J/ψ', mass: PARTICLES.jpsi.massGeV },
-  { label: 'Υ(1S)', mass: PARTICLES.upsilon1s.massGeV },
-  { label: 'Υ(2S)', mass: PARTICLES.upsilon2s.massGeV },
-  { label: 'Υ(3S)', mass: PARTICLES.upsilon3s.massGeV },
-  { label: 'Z', mass: PARTICLES.z.massGeV },
-];
+const KNOWN: Record<Channel, { label: string; mass: number }[]> = {
+  mumu: [
+    { label: 'J/ψ', mass: PARTICLES.jpsi.massGeV },
+    { label: 'Υ(1S)', mass: PARTICLES.upsilon1s.massGeV },
+    { label: 'Υ(2S)', mass: PARTICLES.upsilon2s.massGeV },
+    { label: 'Υ(3S)', mass: PARTICLES.upsilon3s.massGeV },
+    { label: 'Z', mass: PARTICLES.z.massGeV },
+  ],
+  gammagamma: [{ label: 'H', mass: PARTICLES.higgs.massGeV }],
+  fourlepton: [
+    { label: 'Z', mass: PARTICLES.z.massGeV },
+    { label: 'H', mass: PARTICLES.higgs.massGeV },
+  ],
+};
 
 const MARGIN = { left: 56, right: 16, top: 14, bottom: 34 };
 
@@ -122,7 +131,8 @@ export function HistogramCanvas(props: Props) {
     }
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(t('histogram.axisMass'), MARGIN.left + plotW - ctx.measureText(t('histogram.axisMass')).width, MARGIN.top + plotH + 32);
+    const axisLabel = t('histogram.axisMassChannel', { channel: t(`channel.${props.channel}`) });
+    ctx.fillText(axisLabel, MARGIN.left + plotW - ctx.measureText(axisLabel).width, MARGIN.top + plotH + 32);
     ctx.save();
     ctx.translate(12, MARGIN.top);
     ctx.rotate(-Math.PI / 2);
@@ -149,7 +159,7 @@ export function HistogramCanvas(props: Props) {
       ctx.font = '600 11px "IBM Plex Sans", system-ui, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      for (const known of KNOWN) {
+      for (const known of KNOWN[props.channel]) {
         if (known.mass < view.minGeV || known.mass > view.maxGeV) continue;
         const x = xOf(known.mass);
         ctx.beginPath();

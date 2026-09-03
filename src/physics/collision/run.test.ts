@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { CollisionRun, DIMUON_HISTOGRAM, buildTemplate, smoothCounts } from './run';
 import { Histogram } from '../analysis/histogram';
+import { analyseWindow } from '../analysis/window';
 import { DEFAULT_DETECTOR } from '../detector/detector';
 import { Random } from '../random';
 import { processById } from './processes';
 
-const CUTS = { muonPtMinGeV: 3 };
+import { DEFAULT_CUTS } from './run';
+const CUTS = DEFAULT_CUTS;
 const INVERSE_NANOBARN_M2 = 1e37;
 
 describe('collision run', () => {
@@ -51,6 +53,28 @@ describe('collision run', () => {
     expect(run.snapshot().collisions).toBe(0);
   });
 
+  it('fills the diphoton and four-lepton channels from 10 fb⁻¹ at 13 TeV', () => {
+    const run = new CollisionRun(6);
+    run.collect(10 * 1e43, 13000, CUTS);
+    const gg = analyseWindow(run.histograms.gammagamma, { minGeV: 121, maxGeV: 129 });
+    // A visible bump over a large background, a few sigma from 10 fb⁻¹ as in 2012.
+    expect(gg.background).toBeGreaterThan(5000);
+    expect(gg.signal).toBeGreaterThan(200);
+    expect(gg.significance).toBeGreaterThan(2.5);
+    const fl = run.histograms.fourlepton;
+    expect(fl.integral(118, 132)).toBeGreaterThan(10);
+    expect(run.visibleByProcess['higgs_fourlepton']).toBeGreaterThan(5);
+    expect(run.snapshot().entriesByChannel.fourlepton).toBeGreaterThan(10);
+  });
+
+  it('resetChannel clears one channel only', () => {
+    const run = new CollisionRun(7);
+    run.collect(1e40, 13000, CUTS);
+    run.resetChannel('gammagamma');
+    expect(run.histograms.gammagamma.entries).toBe(0);
+    expect(run.histograms.mumu.entries).toBeGreaterThan(0);
+  });
+
   it('smoothing preserves the total and fills neighbouring bins', () => {
     const h = new Histogram({ min: 0, max: 100, bins: 1000 });
     h.addCounts(500, 1000);
@@ -64,7 +88,7 @@ describe('collision run', () => {
   });
 
   it('the Z template has no empty bins across the peak region', () => {
-    const template = buildTemplate(processById('z_mumu'), 13000, { muonPtMinGeV: 20 }, DEFAULT_DETECTOR, DIMUON_HISTOGRAM, new Random(9));
+    const template = buildTemplate(processById('z_mumu'), 13000, { ptMinGeV: 20 }, DEFAULT_DETECTOR, DIMUON_HISTOGRAM, new Random(9));
     const h = new Histogram(DIMUON_HISTOGRAM);
     let total = 0;
     for (let b = h.binOf(85); b <= h.binOf(97); b++) {

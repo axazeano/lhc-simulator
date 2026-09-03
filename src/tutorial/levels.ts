@@ -7,6 +7,7 @@ import {
   type MachineState,
 } from '../physics/accelerator';
 import type { MassWindow, WindowAnalysis } from '../physics/analysis/window';
+import type { Channel } from '../physics/collision/channels';
 import type { RunSnapshot } from '../physics/collision/run';
 import type { SelectionCuts } from '../physics/detector/detector';
 
@@ -21,6 +22,8 @@ export interface LevelSetup {
   targetEnergyGeV: number;
   timeSpeed: number;
   beam: BeamParameters;
+  channel: Channel;
+  /** pT threshold for the level's channel; other channels keep their defaults. */
   cuts: SelectionCuts;
   view: MassWindow;
   window: MassWindow;
@@ -34,6 +37,7 @@ export interface LevelAccess {
   beam: boolean;
   ptCut: boolean;
   massWindow: boolean;
+  channel: boolean;
 }
 
 export interface LevelVisibility {
@@ -55,9 +59,12 @@ export interface Snapshot {
   luminosityCm2S: number | null;
   colliding: boolean;
   run: RunSnapshot;
+  channel: Channel;
+  /** Analysis of the active channel's histogram with the active window. */
   analysis: WindowAnalysis;
   window: MassWindow;
   cuts: SelectionCuts;
+  integratedLuminosityFb: number;
   quizCorrect: ReadonlySet<string>;
 }
 
@@ -82,6 +89,8 @@ export interface Level {
   quiz: QuizQuestion[];
   conditions: Condition[];
   failure?(s: Snapshot): boolean;
+  /** Message key shown when `failure` triggers; defaults to the beam-lost message. */
+  failureKey?: string;
 }
 
 const ALL_ACCESS: LevelAccess = {
@@ -92,6 +101,7 @@ const ALL_ACCESS: LevelAccess = {
   beam: true,
   ptCut: true,
   massWindow: true,
+  channel: true,
 };
 
 const NO_ACCESS: LevelAccess = {
@@ -102,6 +112,7 @@ const NO_ACCESS: LevelAccess = {
   beam: false,
   ptCut: false,
   massWindow: false,
+  channel: false,
 };
 
 const VIEW_ALL: MassWindow = { minGeV: 2, maxGeV: 200 };
@@ -114,10 +125,14 @@ const BASE_SETUP: LevelSetup = {
   targetEnergyGeV: LHC_MACHINE_CONFIG.injectionEnergyGeV,
   timeSpeed: 1,
   beam: LHC_DESIGN_BEAM,
-  cuts: { muonPtMinGeV: 3 },
+  channel: 'mumu',
+  cuts: { ptMinGeV: 3 },
   view: VIEW_ALL,
   window: WINDOW_JPSI,
 };
+
+/** Luminosity budget of the Higgs → γγ level, in fb⁻¹. */
+export const HIGGS_BUDGET_FB = 30;
 
 const beamPresent = (s: Snapshot) => s.machine.status === 'injected' || s.machine.status === 'stable';
 const quiz = (id: string): Condition => ({ key: `quiz.${id}`, test: (s) => s.quizCorrect.has(id) });
@@ -299,7 +314,111 @@ export const LEVELS: Level[] = [
     ],
     failure: (s) => s.machine.status === 'lost',
   },
+  {
+    id: 'higgs-gammagamma',
+    titleKey: 'level.higgs-gammagamma.title',
+    introKey: 'level.higgs-gammagamma.intro',
+    goalKey: 'level.higgs-gammagamma.goal',
+    hintKey: 'level.higgs-gammagamma.hint',
+    cardKey: 'level.higgs-gammagamma.card',
+    cardHref: 'https://arxiv.org/abs/1207.7214',
+    setup: {
+      ...BASE_SETUP,
+      targetEnergyGeV: 7000,
+      timeSpeed: 3600,
+      channel: 'gammagamma',
+      cuts: { ptMinGeV: 30 },
+      view: { minGeV: 100, maxGeV: 160 },
+      window: { minGeV: 100, maxGeV: 110 },
+    },
+    access: ALL_ACCESS,
+    visible: { readouts: true, beam: true, histogram: true },
+    quiz: [
+      {
+        id: 'five-sigma',
+        questionKey: 'quiz.five-sigma.q',
+        optionKeys: ['quiz.five-sigma.a', 'quiz.five-sigma.b', 'quiz.five-sigma.c'],
+        correct: 1,
+      },
+    ],
+    conditions: [
+      { key: 'cond.channelGammaGamma', test: (s) => s.channel === 'gammagamma' },
+      {
+        key: 'cond.windowOnHiggs',
+        test: (s) => s.channel === 'gammagamma' && windowCovers(s.window, PARTICLES.higgs.massGeV, 10),
+      },
+      {
+        key: 'cond.higgsSignal100',
+        test: (s) => higgsWindow(s, 'gammagamma', 10) && s.analysis.signal >= 100,
+        progress: (s) => `${Math.max(0, Math.round(higgsWindow(s, 'gammagamma', 10) ? s.analysis.signal : 0))} / 100`,
+      },
+      {
+        key: 'cond.fiveSigma',
+        test: (s) => higgsWindow(s, 'gammagamma', 10) && s.analysis.significance >= 5,
+        progress: (s) => `${(higgsWindow(s, 'gammagamma', 10) ? Math.min(99, Math.max(0, s.analysis.significance)) : 0).toFixed(1)} / 5 σ`,
+      },
+      {
+        key: 'cond.withinBudget',
+        test: (s) => s.integratedLuminosityFb <= HIGGS_BUDGET_FB,
+        progress: (s) => `${s.integratedLuminosityFb.toFixed(1)} / ${HIGGS_BUDGET_FB} fb⁻¹`,
+      },
+      quiz('five-sigma'),
+    ],
+    failure: (s) => s.machine.status === 'lost' || s.integratedLuminosityFb > HIGGS_BUDGET_FB,
+    failureKey: 'tutorial.budgetExceeded',
+  },
+  {
+    id: 'four-leptons',
+    titleKey: 'level.four-leptons.title',
+    introKey: 'level.four-leptons.intro',
+    goalKey: 'level.four-leptons.goal',
+    hintKey: 'level.four-leptons.hint',
+    cardKey: 'level.four-leptons.card',
+    cardHref: 'https://en.wikipedia.org/wiki/Higgs_boson#Discovery',
+    setup: {
+      ...BASE_SETUP,
+      targetEnergyGeV: 7000,
+      timeSpeed: 3600,
+      channel: 'fourlepton',
+      cuts: { ptMinGeV: 7 },
+      view: { minGeV: 80, maxGeV: 200 },
+      window: { minGeV: 150, maxGeV: 170 },
+    },
+    access: ALL_ACCESS,
+    visible: { readouts: true, beam: true, histogram: true },
+    quiz: [
+      {
+        id: 'why-so-few',
+        questionKey: 'quiz.why-so-few.q',
+        optionKeys: ['quiz.why-so-few.a', 'quiz.why-so-few.b', 'quiz.why-so-few.c'],
+        correct: 2,
+      },
+    ],
+    conditions: [
+      { key: 'cond.channelFourLepton', test: (s) => s.channel === 'fourlepton' },
+      {
+        key: 'cond.windowOnHiggs',
+        test: (s) => s.channel === 'fourlepton' && windowCovers(s.window, PARTICLES.higgs.massGeV, 20),
+      },
+      {
+        key: 'cond.higgsSignal20',
+        test: (s) => higgsWindow(s, 'fourlepton', 20) && s.analysis.signal >= 20,
+        progress: (s) => `${Math.max(0, Math.round(higgsWindow(s, 'fourlepton', 20) ? s.analysis.signal : 0))} / 20`,
+      },
+      {
+        key: 'cond.fiveSigma',
+        test: (s) => higgsWindow(s, 'fourlepton', 20) && s.analysis.significance >= 5,
+        progress: (s) => `${(higgsWindow(s, 'fourlepton', 20) ? Math.min(99, Math.max(0, s.analysis.significance)) : 0).toFixed(1)} / 5 σ`,
+      },
+      quiz('why-so-few'),
+    ],
+    failure: (s) => s.machine.status === 'lost',
+  },
 ];
+
+function higgsWindow(s: Snapshot, channel: Channel, maxWidth: number): boolean {
+  return s.channel === channel && windowCovers(s.window, PARTICLES.higgs.massGeV, maxWidth);
+}
 
 export const SANDBOX: Level = {
   id: 'sandbox',
