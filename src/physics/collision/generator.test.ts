@@ -126,4 +126,21 @@ describe('event generator', () => {
     expect(event.kinds).toEqual(['photon', 'photon']);
     for (const d of event.daughters) expect(invariantMass(d)).toBeLessThan(1e-3);
   });
+
+  it('assigns charges: resonances opposite-sign, photons neutral, continuum partly same-sign', () => {
+    const rng = new Random(20);
+    for (let i = 0; i < 50; i++) {
+      const e = generateEvent(z, 13000, rng);
+      expect(e.charges[0]! + e.charges[1]!).toBe(0);
+      expect(Math.abs(e.charges[0]!)).toBe(1);
+    }
+    expect(generateEvent(processById('higgs_gammagamma'), 13000, rng).charges).toEqual([0, 0]);
+    let sameSign = 0;
+    for (let i = 0; i < 2000; i++) {
+      const e = generateEvent(continuum, 13000, rng);
+      if (e.charges[0] === e.charges[1]) sameSign += 1;
+    }
+    expect(sameSign / 2000).toBeGreaterThan(0.18);
+    expect(sameSign / 2000).toBeLessThan(0.32);
+  });
 });

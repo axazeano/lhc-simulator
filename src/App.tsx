@@ -30,6 +30,7 @@ import { HistogramCanvas } from './ui/HistogramCanvas';
 import { Readouts } from './ui/Readouts';
 import { RingCanvas } from './ui/RingCanvas';
 import { TutorialPanel } from './ui/TutorialPanel';
+import { AnalysisScreen } from './ui/analysis/AnalysisScreen';
 import { ExplainerDialog, isExplainerTopic, type ExplainerTopic } from './ui/explainers/Explainer';
 import { GlossaryExplainer } from './ui/explainers/GlossaryExplainer';
 import { isMuted, play, setMuted } from './ui/sound';
@@ -73,6 +74,7 @@ export function App() {
   const [logScale, setLogScale] = useState(true);
   const [showKnownMasses, setShowKnownMasses] = useState(false);
   const [runVersion, setRunVersion] = useState(0);
+  const [screen, setScreen] = useState<'console' | 'analysis'>('console');
   // `?explain=beam|magnets|mass` opens an explainer on load, handy for linking and screenshots.
   const [explainer, setExplainer] = useState<ExplainerTopic | null>(() => {
     const requested = new URLSearchParams(window.location.search).get('explain');
@@ -98,6 +100,9 @@ export function App() {
   const runRef = useRef<CollisionRun | null>(null);
   runRef.current ??= new CollisionRun(Date.now() >>> 0);
   const run = runRef.current;
+  // Expose the run for debugging in development builds only.
+  if (import.meta.env.DEV) (window as unknown as { __lhcRun?: CollisionRun }).__lhcRun = run;
+  if (run.fill === 1 && machine.status === 'empty' && run.stores.mumu.size === 0) run.fill = 0;
 
   const update = useCallback((fn: (state: MachineState) => MachineState) => {
     const previous = machineRef.current;
@@ -107,6 +112,8 @@ export function App() {
       setMachine(next);
       if (next.status === 'lost' && previous.status !== 'lost') play('lost');
       else if (previous.status === 'empty' && next.status !== 'empty' && next.status !== 'lost') play('inject');
+      // A new fill starts with every injection; recorded events are tagged with it.
+      if (previous.status === 'empty' && next.status !== 'empty') runRef.current!.fill += 1;
     }
   }, []);
 
@@ -295,6 +302,14 @@ export function App() {
           <p className="eyebrow">{t('app.stage')}</p>
         </div>
         <div className="header-tools">
+          <div className="segmented screen-switch" role="radiogroup">
+            <button type="button" role="radio" aria-checked={screen === 'console'} className={screen === 'console' ? 'active' : ''} onClick={() => setScreen('console')}>
+              {t('nav.console')}
+            </button>
+            <button type="button" role="radio" aria-checked={screen === 'analysis'} className={screen === 'analysis' ? 'active' : ''} onClick={() => setScreen('analysis')}>
+              {t('nav.analysis')}
+            </button>
+          </div>
           <button type="button" className="explain-button" onClick={() => setExplainer('glossary')}>
             {t('explainer.glossary.title')}
           </button>
@@ -314,6 +329,9 @@ export function App() {
         </div>
       </header>
 
+      {screen === 'analysis' && <AnalysisScreen run={run} runVersion={runVersion} channel={channel} onChannel={onChannel} />}
+
+      {screen === 'console' && (
       <TutorialPanel
         level={level}
         completed={completedSet}
@@ -327,7 +345,9 @@ export function App() {
         onNext={onNext}
         onResetProgress={resetProgress}
       />
+      )}
 
+      {screen === 'console' && (
       <main className="layout">
         <div className="ring-wrap">
           <RingCanvas machine={machine} energyFraction={energyFraction} />
@@ -397,6 +417,7 @@ export function App() {
           />
         )}
       </main>
+      )}
 
       <footer className="app-footer">{t('footer.sources')}</footer>
 

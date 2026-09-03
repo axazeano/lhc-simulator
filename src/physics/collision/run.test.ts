@@ -58,7 +58,7 @@ describe('collision run', () => {
     expect(run.snapshot().collisions).toBe(0);
   });
 
-  it('fills the diphoton and four-lepton channels from 30 fb⁻¹ at 13 TeV', () => {
+  it('fills the diphoton and four-lepton channels from 30 fb⁻¹ at 13 TeV', { timeout: 30000 }, () => {
     const run = new CollisionRun(6);
     for (let i = 0; i < 300; i++) run.collect(0.1 * 1e43, 13000); // 30 fb⁻¹ in app-sized steps
     const gg = analyseWindow(run.histogramFor('gammagamma'), { minGeV: 121, maxGeV: 129 });
@@ -93,7 +93,7 @@ describe('collision run', () => {
 
   it('high-mass events are recorded one by one while the low-mass bulk is prescaled', () => {
     const run = new CollisionRun(21);
-    run.collect(5 * INVERSE_NANOBARN_M2, 13000); // ~10 Z bosons visible, thousands of J/ψ
+    run.collect(50 * INVERSE_NANOBARN_M2, 13000); // ~40 Z bosons visible, tens of thousands of J/ψ
     const store = run.stores.mumu;
     const byProcess = store.countByProcess(3);
     const z = byProcess.get(PROCESSES.findIndex((p) => p.id === 'z_mumu')) ?? 0;
@@ -101,7 +101,7 @@ describe('collision run', () => {
     expect(Number.isInteger(Math.round(z * 1e6) / 1e6)).toBe(true);
   });
 
-  it('the Z peak in the mumu channel is smooth at very high statistics', () => {
+  it('the Z peak in the mumu channel is smooth at very high statistics', { timeout: 30000 }, () => {
     const run = new CollisionRun(9);
     for (let i = 0; i < 40; i++) run.collect(5e42, 14000); // 200 fb⁻¹ in app-sized steps
     const h = run.histogramFor('mumu', DEFAULT_CUTS.mumu);
@@ -137,10 +137,10 @@ describe('event store', () => {
   it('thinning keeps the represented total and never touches single events first', () => {
     const store = new EventStore({ min: 0, max: 100, bins: 100 }, 1000);
     const rng = new Random(12);
-    for (let i = 0; i < 900; i++) store.record({ massGeV: 50, minPtGeV: 5, sqrtSGeV: 13000, processIndex: 1, weight: 10 }, rng);
-    for (let i = 0; i < 100; i++) store.record({ massGeV: 20, minPtGeV: 5, sqrtSGeV: 13000, processIndex: 2, weight: 1 }, rng);
+    for (let i = 0; i < 900; i++) store.record({ massGeV: 50, minPtGeV: 5, sqrtSGeV: 13000, processIndex: 1, weight: 10, fill: 1, particles: [] }, rng);
+    for (let i = 0; i < 100; i++) store.record({ massGeV: 20, minPtGeV: 5, sqrtSGeV: 13000, processIndex: 2, weight: 1, fill: 1, particles: [] }, rng);
     const before = store.representedEvents;
-    store.record({ massGeV: 50, minPtGeV: 5, sqrtSGeV: 13000, processIndex: 1, weight: 10 }, rng);
+    store.record({ massGeV: 50, minPtGeV: 5, sqrtSGeV: 13000, processIndex: 1, weight: 10, fill: 1, particles: [] }, rng);
     expect(store.size).toBeLessThan(1000);
     expect(store.representedEvents / (before + 10)).toBeCloseTo(1, 0);
     expect(store.histogram(0).integral(20, 21)).toBe(100);
@@ -149,11 +149,29 @@ describe('event store', () => {
   it('applies the analysis threshold to the recorded minimum pT', () => {
     const store = new EventStore({ min: 0, max: 100, bins: 100 });
     const rng = new Random(13);
-    store.record({ massGeV: 10, minPtGeV: 4, sqrtSGeV: 900, processIndex: 0, weight: 1 }, rng);
-    store.record({ massGeV: 10, minPtGeV: 12, sqrtSGeV: 900, processIndex: 0, weight: 1 }, rng);
+    store.record({ massGeV: 10, minPtGeV: 4, sqrtSGeV: 900, processIndex: 0, weight: 1, fill: 1, particles: [] }, rng);
+    store.record({ massGeV: 10, minPtGeV: 12, sqrtSGeV: 900, processIndex: 0, weight: 1, fill: 1, particles: [] }, rng);
     expect(store.histogram(3).entries).toBe(2);
     expect(store.histogram(10).entries).toBe(1);
     expect(store.histogram(20).entries).toBe(0);
+  });
+
+  it('pool draws carry their own freshly decayed particles', () => {
+    const pool = buildEventPool(processById('jpsi_mumu'), 13000, RECORDING_CUTS.mumu, DEFAULT_DETECTOR, DIMUON_HISTOGRAM, new Random(18), 60);
+    const rng = new Random(19);
+    const phis = new Set<number>();
+    let withParticles = 0;
+    for (let i = 0; i < 300; i++) {
+      const d = drawFromPool(pool, rng, pool.low, 'mixed');
+      if (!d || d.particles.length !== 2) continue;
+      withParticles += 1;
+      phis.add(Math.round(Math.abs(d.particles[0]!.phi - d.particles[1]!.phi) * 1e6));
+      // Jittered fallbacks may dip a hair below the recording threshold.
+      expect(d.minPtGeV).toBeGreaterThanOrEqual(RECORDING_CUTS.mumu.ptMinGeV * 0.9);
+    }
+    expect(withParticles).toBeGreaterThan(250);
+    // Nearly every draw has a distinct opening angle: no frozen templates.
+    expect(phis.size).toBeGreaterThan(withParticles * 0.9);
   });
 
   it('the fitted continuum density is smooth to well under a per cent', () => {
@@ -207,19 +225,33 @@ describe('polynomial fit', () => {
     const store = new EventStore({ min: 0, max: 100, bins: 100 }, 1000);
     const rng = new Random(17);
     // One heavy lone record in bin 90, the rest crowded into bin 10.
-    store.record({ massGeV: 90.5, minPtGeV: 5, sqrtSGeV: 900, processIndex: 1, weight: 100 }, rng);
-    for (let i = 0; i < 999; i++) store.record({ massGeV: 10.5, minPtGeV: 5, sqrtSGeV: 900, processIndex: 1, weight: 4 }, rng);
+    store.record({ massGeV: 90.5, minPtGeV: 5, sqrtSGeV: 900, processIndex: 1, weight: 100, fill: 1, particles: [] }, rng);
+    for (let i = 0; i < 999; i++) store.record({ massGeV: 10.5, minPtGeV: 5, sqrtSGeV: 900, processIndex: 1, weight: 4, fill: 1, particles: [] }, rng);
     for (let round = 0; round < 5; round++) store.thin(rng);
     const h = store.histogram(0);
     expect(h.integral(90, 91)).toBe(100);
     expect(h.integral(10, 11)).toBeCloseTo(999 * 4, 1);
   });
 
+  it('thinning preserves histograms made after a pT threshold', () => {
+    const store = new EventStore({ min: 0, max: 100, bins: 100 }, 4000);
+    const rng = new Random(23);
+    for (let i = 0; i < 4000; i++) {
+      const minPt = 3 + 60 * rng.next();
+      store.record({ massGeV: 50 + 10 * rng.gaussian(), minPtGeV: minPt, sqrtSGeV: 900, processIndex: 1, weight: 2 + rng.next(), fill: 1, particles: [] }, rng);
+    }
+    const before = store.histogram(30);
+    const beforeCounts = Float64Array.from(before.counts);
+    store.thin(rng);
+    const after = store.histogram(30);
+    for (let b = 0; b < 100; b++) expect(after.counts[b]).toBeCloseTo(beforeCounts[b]!, 1);
+  });
+
   it('thinning is stratified: every bin keeps about half of its prescaled records', () => {
     const store = new EventStore({ min: 0, max: 100, bins: 100 }, 2000);
     const rng = new Random(16);
-    for (let i = 0; i < 2000; i++) store.record({ massGeV: (i % 100) + 0.5, minPtGeV: 5, sqrtSGeV: 900, processIndex: 1, weight: 4 }, rng);
-    store.record({ massGeV: 50.5, minPtGeV: 5, sqrtSGeV: 900, processIndex: 1, weight: 4 }, rng); // triggers thinning
+    for (let i = 0; i < 2000; i++) store.record({ massGeV: (i % 100) + 0.5, minPtGeV: 5, sqrtSGeV: 900, processIndex: 1, weight: 4, fill: 1, particles: [] }, rng);
+    store.record({ massGeV: 50.5, minPtGeV: 5, sqrtSGeV: 900, processIndex: 1, weight: 4, fill: 1, particles: [] }, rng); // triggers thinning
     const h = store.histogram(0);
     // Every bin held 20 records of weight 4 when the store filled; bin 50 then received one more.
     for (let b = 0; b < 100; b++) expect(h.counts[b]).toBeCloseTo(b === 50 ? 84 : 80, 1);

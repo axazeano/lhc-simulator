@@ -1065,3 +1065,201 @@ dialog.explainer::backdrop {
     min-height: 260px;
   }
 }
+
+/* Analysis screen */
+.screen-switch button {
+  padding: 6px 14px;
+  font-weight: 600;
+}
+
+.analysis-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.analysis-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.analysis-head h2 {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.analysis-head .note {
+  max-width: 60ch;
+}
+
+.analysis-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.analysis-summary .button-row {
+  align-items: center;
+}
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+  grid-template-areas:
+    'selection plot'
+    'selection fit'
+    'events events';
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .analysis-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'selection'
+      'plot'
+      'fit'
+      'events';
+  }
+}
+
+.selection-editor { grid-area: selection; }
+.plot-panel { grid-area: plot; }
+.fit-panel { grid-area: fit; }
+.event-table { grid-area: events; }
+
+.selection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selection-list .button-row {
+  margin-top: 6px;
+}
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.form-grid > label > span:first-child {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.form-grid input[type='text'] {
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.plot-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: flex-end;
+  font-size: 14px;
+}
+
+.plot-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plot-controls label > span:first-child {
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+
+.plot-controls label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+
+.plot-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.plot-canvas {
+  width: 100%;
+  height: 360px;
+  display: block;
+  cursor: crosshair;
+}
+
+.tbl-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+}
+
+.event-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13.5px;
+}
+
+.event-table th,
+.event-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.event-table th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.event-table td.n,
+.event-table th.n {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.particles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12.5px;
+}
+
+.page-indicator {
+  align-self: center;
+  color: var(--ink-2);
+}
+
+.event-table .sort {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

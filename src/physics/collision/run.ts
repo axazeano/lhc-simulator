@@ -127,6 +127,9 @@ export class CollisionRun {
     };
   }
 
+  /** The data-taking fill new records are tagged with; the app raises it on every injection. */
+  fill = 1;
+
   /** Record `deltaLuminosityM2` of collisions at √s. */
   collect(deltaLuminosityM2: number, sqrtSGeV: number): void {
     if (deltaLuminosityM2 <= 0) return;
@@ -157,14 +160,17 @@ export class CollisionRun {
     for (let i = 0; i < n; i++) {
       const event = generateEvent(process, sqrtSGeV, this.rng);
       this.simulatedEvents += 1;
-      const record = reconstructRecord(event.daughters, event.kinds, this.detector, cuts, this.rng);
+      const record = reconstructRecord(event.daughters, event.kinds, event.charges, this.detector, cuts, this.rng);
       if (!record) continue;
-      store.record({ massGeV: record.massGeV, minPtGeV: record.minPtGeV, sqrtSGeV, processIndex: index, weight: 1 }, this.rng);
+      store.record(
+        { massGeV: record.massGeV, minPtGeV: record.minPtGeV, sqrtSGeV, processIndex: index, weight: 1, fill: this.fill, particles: record.particles },
+        this.rng,
+      );
       store.keepForDisplay({
         processId: process.id,
         sqrtSGeV,
         massGeV: record.massGeV,
-        particles: record.particles.map((vector, k) => ({ kind: event.kinds[k] ?? 'muon', vector })),
+        particles: record.vectors.map((vector, k) => ({ kind: event.kinds[k] ?? 'muon', vector })),
       });
     }
   }
@@ -198,7 +204,10 @@ export class CollisionRun {
       for (let i = 0; i < n; i++) {
         const drawn = drawFromPool(pool, this.rng, region);
         if (!drawn) return;
-        store.record({ massGeV: drawn.massGeV, minPtGeV: drawn.minPtGeV, sqrtSGeV, processIndex: index, weight: 1 }, this.rng);
+        store.record(
+          { massGeV: drawn.massGeV, minPtGeV: drawn.minPtGeV, sqrtSGeV, processIndex: index, weight: 1, fill: this.fill, particles: drawn.particles },
+          this.rng,
+        );
       }
       return;
     }
@@ -210,7 +219,18 @@ export class CollisionRun {
     for (let i = 0; i < n; i++) {
       const drawn = drawFromPool(pool, this.rng, region, 'mixed');
       if (!drawn) return;
-      store.record({ massGeV: drawn.massGeV, minPtGeV: drawn.minPtGeV, sqrtSGeV, processIndex: index, weight: scale * drawn.weight }, this.rng);
+      store.record(
+        {
+          massGeV: drawn.massGeV,
+          minPtGeV: drawn.minPtGeV,
+          sqrtSGeV,
+          processIndex: index,
+          weight: scale * drawn.weight,
+          fill: this.fill,
+          particles: drawn.particles,
+        },
+        this.rng,
+      );
     }
   }
 

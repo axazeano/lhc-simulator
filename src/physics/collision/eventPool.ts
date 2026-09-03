@@ -1,9 +1,10 @@
 import { Histogram, type HistogramSpec } from '../analysis/histogram';
 import { reconstructParticle, type DetectorModel, type SelectionCuts } from '../detector/detector';
-import { add, invariantMass, transverseMomentum, type FourVector } from '../fourvector';
+import { add, azimuth, fromPtRapidityPhiM, invariantMass, pseudorapidity, rapidity, transverseMomentum, type FourVector } from '../fourvector';
+import type { RecordedParticle } from './eventStore';
 import type { Random } from '../random';
 import { PARTICLES } from '../../data/particles';
-import { BREIT_WIGNER_REACH, generateWeightedEvent, powerLawMassDensity } from './generator';
+import { BREIT_WIGNER_REACH, decayForProcess, generateWeightedEvent, powerLawMassDensity } from './generator';
 import type { ProcessDefinition } from './processes';
 
 /**
@@ -24,6 +25,9 @@ export interface PoolEvent {
   massGeV: number;
   minPtGeV: number;
   weight: number;
+  particles: RecordedParticle[];
+  /** Kinematics of the (reconstructed) parent, so a fresh decay can be thrown for a draw. */
+  parent: { ptGeV: number; rapidity: number; phi: number };
 }
 
 /** A contiguous range of mass bins with its own sampling table. */
@@ -39,6 +43,9 @@ export interface Region {
 
 export interface EventPool {
   spec: HistogramSpec;
+  process: ProcessDefinition;
+  detector: DetectorModel;
+  recordingCuts: SelectionCuts;
   events: PoolEvent[];
   /** Fraction of generated events (weighted) that pass acceptance at the recording threshold. */
   acceptance: number;
@@ -61,27 +68,37 @@ const POOL_MAX_SAMPLES = 400000;
 const CONTINUUM_MIN_ACCEPTED = 20000;
 /** Pool events a pT draw chooses from: bins around the mass are widened until this many are available. */
 const PT_SAMPLE_SIZE = 300;
+/**
+ * Share of 'mixed' draws taken uniformly over the mass region rather than from the density.
+ * Small, so that most records carry nearly the same weight (low variance in every bin), yet
+ * enough to keep the sparse tails populated.
+ */
+const UNIFORM_SHARE = 0.15;
 
-/** Reconstruct every particle; returns the mass and the smallest pT, or null if any particle is lost. */
+/** Reconstruct every particle; returns the mass, the smallest pT and the measured particles, or null if any is lost. */
 export function reconstructRecord(
   daughters: readonly FourVector[],
   kinds: readonly ('muon' | 'electron' | 'photon')[],
+  charges: readonly number[],
   detector: DetectorModel,
   cuts: SelectionCuts,
   rng: Random,
-): { massGeV: number; minPtGeV: number; particles: FourVector[] } | null {
+): { massGeV: number; minPtGeV: number; vectors: FourVector[]; particles: RecordedParticle[] } | null {
   let sum: FourVector = { e: 0, px: 0, py: 0, pz: 0 };
   let minPt = Infinity;
-  const particles: FourVector[] = [];
+  const vectors: FourVector[] = [];
+  const particles: RecordedParticle[] = [];
   for (let i = 0; i < daughters.length; i++) {
-    const measured = reconstructParticle(daughters[i]!, kinds[i] ?? 'muon', detector, cuts, rng);
+    const kind = kinds[i] ?? 'muon';
+    const measured = reconstructParticle(daughters[i]!, kind, detector, cuts, rng);
     if (!measured) return null;
-    particles.push(measured);
+    vectors.push(measured);
     sum = add(sum, measured);
     const pt = transverseMomentum(measured);
     if (pt < minPt) minPt = pt;
+    particles.push({ kind, ptGeV: pt, eta: pseudorapidity(measured), phi: azimuth(measured), charge: charges[i] ?? 0 });
   }
-  return { massGeV: invariantMass(sum), minPtGeV: minPt, particles };
+  return { massGeV: invariantMass(sum), minPtGeV: minPt, vectors, particles };
 }
 
 export function buildEventPool(
@@ -108,9 +125,16 @@ export function buildEventPool(
     samples += 1;
     const event = generateWeightedEvent(process, sqrtSGeV, rng);
     generated.fill(event.massGeV, event.weight);
-    const record = reconstructRecord(event.daughters, event.kinds, detector, recordingCuts, rng);
+    const record = reconstructRecord(event.daughters, event.kinds, event.charges, detector, recordingCuts, rng);
     if (!record) continue;
-    events.push({ massGeV: record.massGeV, minPtGeV: record.minPtGeV, weight: event.weight });
+    const parentVector = record.vectors.reduce((sum, v) => add(sum, v), { e: 0, px: 0, py: 0, pz: 0 });
+    events.push({
+      massGeV: record.massGeV,
+      minPtGeV: record.minPtGeV,
+      weight: event.weight,
+      particles: record.particles,
+      parent: { ptGeV: transverseMomentum(parentVector), rapidity: rapidity(parentVector), phi: azimuth(parentVector) },
+    });
     raw.fill(record.massGeV, event.weight);
     acceptedTrue.fill(event.massGeV, event.weight);
     acceptedWeight += event.weight;
@@ -176,6 +200,9 @@ export function buildEventPool(
 
   return {
     spec,
+    process,
+    detector,
+    recordingCuts,
     events,
     acceptance: samples > 0 ? acceptedWeight / samples : 0,
     density,
@@ -334,9 +361,9 @@ function binomial(n: number, k: number): number {
  * Draw one event from a region of the pool: a fresh mass from the smoothed density and a pT
  * from a nearby pool event.
  * - 'proportional': the mass follows the density; the event stands for one real event.
- * - 'mixed': half the draws follow the density, half are uniform over the region, and the
+ * - 'mixed': most draws follow the density, a small share is uniform over the region, and the
  *   returned weight corrects for it. Tails then keep getting records even when most of the
- *   distribution sits in a peak, at the price of weights between 0 and 2.
+ *   distribution sits in a peak, while the bulk of the records keep nearly equal weights.
  */
 export function drawFromPool(
   pool: EventPool,
@@ -348,7 +375,7 @@ export function drawFromPool(
   if (n === 0 || region.fraction <= 0) return null;
   let bin: number;
   let weight = 1;
-  if (mode === 'mixed' && rng.next() < 0.5) {
+  if (mode === 'mixed' && rng.next() < UNIFORM_SHARE) {
     bin = region.start + Math.min(n - 1, Math.floor(rng.next() * n));
   } else {
     const target = rng.next() * region.fraction;
@@ -364,19 +391,63 @@ export function drawFromPool(
   if (mode === 'mixed') {
     const p = pool.density[bin]! / region.fraction;
     const u = 1 / n;
-    weight = p / (0.5 * p + 0.5 * u);
+    weight = p / ((1 - UNIFORM_SHARE) * p + UNIFORM_SHARE * u);
   }
   const width = (pool.spec.max - pool.spec.min) / pool.spec.bins;
   const massGeV = pool.spec.min + (bin + rng.next()) * width;
-  return { massGeV, minPtGeV: nearbyMinPt(pool, bin, rng), weight };
+  const template = nearbyEvent(pool, bin, rng);
+  if (!template) return { massGeV, minPtGeV: 0, weight, particles: [], parent: { ptGeV: 0, rapidity: 0, phi: 0 } };
+  // Throw a fresh decay of a parent like the template's, at the drawn mass, through the detector,
+  // so that every record has its own particles. Fall back to the template's particles if the
+  // fresh decay keeps failing the acceptance.
+  const fresh = redecay(pool, template, massGeV, rng) ?? jitterParticles(template.particles, rng);
+  return {
+    massGeV,
+    minPtGeV: fresh.minPtGeV,
+    weight,
+    particles: fresh.particles,
+    parent: template.parent,
+  };
 }
 
-/** The smallest pT of a random pool event from the neighbourhood of the given bin. */
-function nearbyMinPt(pool: EventPool, bin: number, rng: Random): number {
+/**
+ * When a fresh decay keeps failing the acceptance (soft, low-mass pairs), reuse the template's
+ * particles with a small extra smearing, so that no two records share exactly the same
+ * kinematics. The smearing is a few per cent in pT and a few hundredths in angle: well below
+ * anything the analysis resolves, but enough to keep histograms of angles continuous.
+ */
+function jitterParticles(particles: RecordedParticle[], rng: Random): { minPtGeV: number; particles: RecordedParticle[] } {
+  let minPt = Infinity;
+  const out = particles.map((p) => {
+    const ptGeV = p.ptGeV * (1 + 0.03 * rng.gaussian());
+    let phi = p.phi + 0.15 * rng.gaussian();
+    if (phi > Math.PI) phi -= 2 * Math.PI;
+    if (phi < -Math.PI) phi += 2 * Math.PI;
+    if (ptGeV < minPt) minPt = ptGeV;
+    return { kind: p.kind, ptGeV, eta: p.eta + 0.05 * rng.gaussian(), phi, charge: p.charge };
+  });
+  return { minPtGeV: Number.isFinite(minPt) ? minPt : 0, particles: out };
+}
+
+const REDECAY_TRIES = 2;
+
+function redecay(pool: EventPool, template: PoolEvent, massGeV: number, rng: Random): { minPtGeV: number; particles: RecordedParticle[] } | null {
+  for (let attempt = 0; attempt < REDECAY_TRIES; attempt++) {
+    const phi = rng.uniform(0, 2 * Math.PI);
+    const parent = fromPtRapidityPhiM(template.parent.ptGeV, template.parent.rapidity, phi, massGeV);
+    const decay = decayForProcess(pool.process, parent, massGeV, rng);
+    const record = reconstructRecord(decay.daughters, decay.kinds, decay.charges, pool.detector, pool.recordingCuts, rng);
+    if (record) return { minPtGeV: record.minPtGeV, particles: record.particles };
+  }
+  return null;
+}
+
+/** A random pool event from the neighbourhood of the given bin, lending its particles to a fresh draw. */
+function nearbyEvent(pool: EventPool, bin: number, rng: Random): PoolEvent | null {
   const start = pool.ptSliceStart[bin]!;
   const end = pool.ptSliceEnd[bin]!;
-  if (end <= start) return 0;
-  return pool.events[pool.binIndex[start + Math.floor(rng.next() * (end - start))]!]!.minPtGeV;
+  if (end <= start) return null;
+  return pool.events[pool.binIndex[start + Math.floor(rng.next() * (end - start))]!]!;
 }
 
 /**

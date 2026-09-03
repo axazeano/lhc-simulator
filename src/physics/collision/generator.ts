@@ -26,7 +26,16 @@ export interface GeneratedEvent {
   massGeV: number;
   daughters: FourVector[];
   kinds: ParticleKind[];
+  /** Electric charge of each daughter: ±1 for leptons, 0 for photons. */
+  charges: number[];
 }
+
+/**
+ * Share of continuum (combinatorial) pairs whose leptons carry the same sign. Random pairs
+ * from two unrelated decays are as often same-sign as opposite-sign; the Drell–Yan part is
+ * always opposite-sign. Simplification: one fixed share for the whole continuum.
+ */
+export const CONTINUUM_SAME_SIGN_FRACTION = 0.25;
 
 const MUON_MASS = PARTICLES.muon.massGeV;
 const Z_MASS = PARTICLES.z.massGeV;
@@ -128,27 +137,45 @@ export function sampleZPairMasses(massGeV: number, rng: Random): [number, number
   return [m1, m2];
 }
 
+function pairCharges(process: ProcessDefinition, rng: Random): [number, number] {
+  const first = rng.next() < 0.5 ? 1 : -1;
+  const sameSign = process.kind === 'continuum' && rng.next() < CONTINUUM_SAME_SIGN_FRACTION;
+  return [first, sameSign ? first : -first];
+}
+
+/** Decay a parent of the given mass into the process's final state (exported for re-decays of pool draws). */
+export function decayForProcess(
+  process: ProcessDefinition,
+  parent: FourVector,
+  massGeV: number,
+  rng: Random,
+): { daughters: FourVector[]; kinds: ParticleKind[]; charges: number[] } {
+  return decayToFinalState(process, parent, massGeV, rng);
+}
+
 function decayToFinalState(
   process: ProcessDefinition,
   parent: FourVector,
   massGeV: number,
   rng: Random,
-): { daughters: FourVector[]; kinds: ParticleKind[] } {
+): { daughters: FourVector[]; kinds: ParticleKind[]; charges: number[] } {
   switch (process.finalState) {
     case 'mumu': {
       const daughters = decayTwoBody(parent, massGeV, MUON_MASS, MUON_MASS, rng);
-      return { daughters, kinds: ['muon', 'muon'] };
+      return { daughters, kinds: ['muon', 'muon'], charges: pairCharges(process, rng) };
     }
     case 'gammagamma': {
       const daughters = decayTwoBody(parent, massGeV, 0, 0, rng);
-      return { daughters, kinds: ['photon', 'photon'] };
+      return { daughters, kinds: ['photon', 'photon'], charges: [0, 0] };
     }
     case 'fourlepton': {
       const [m1, m2] = sampleZPairMasses(massGeV, rng);
       const [z1, z2] = decayTwoBody(parent, massGeV, m1, m2, rng);
       const [l1, l2] = decayTwoBody(z1, m1, MUON_MASS, MUON_MASS, rng);
       const [l3, l4] = decayTwoBody(z2, m2, MUON_MASS, MUON_MASS, rng);
-      return { daughters: [l1, l2, l3, l4], kinds: ['muon', 'muon', 'muon', 'muon'] };
+      const [c1, c2] = pairCharges(process, rng);
+      const [c3, c4] = pairCharges(process, rng);
+      return { daughters: [l1, l2, l3, l4], kinds: ['muon', 'muon', 'muon', 'muon'], charges: [c1, c2, c3, c4] };
     }
     default:
       throw new Error(`Process ${process.id} has no final state`);
@@ -158,8 +185,8 @@ function decayToFinalState(
 export function generateEvent(process: ProcessDefinition, sqrtSGeV: number, rng: Random): GeneratedEvent {
   const massGeV = sampleParentMass(process, rng);
   const parent = sampleParent(massGeV, sqrtSGeV, rng);
-  const { daughters, kinds } = decayToFinalState(process, parent, massGeV, rng);
-  return { processId: process.id, massGeV, daughters, kinds };
+  const { daughters, kinds, charges } = decayToFinalState(process, parent, massGeV, rng);
+  return { processId: process.id, massGeV, daughters, kinds, charges };
 }
 
 export interface WeightedEvent extends GeneratedEvent {
@@ -197,8 +224,8 @@ export function generateWeightedEvent(
   const y = sampleRapidity(massGeV, sqrtSGeV, rng);
   const phi = rng.uniform(0, 2 * Math.PI);
   const parent = fromPtRapidityPhiM(pt, y, phi, massGeV);
-  const { daughters, kinds } = decayToFinalState(process, parent, massGeV, rng);
-  return { processId: process.id, massGeV, daughters, kinds, weight };
+  const { daughters, kinds, charges } = decayToFinalState(process, parent, massGeV, rng);
+  return { processId: process.id, massGeV, daughters, kinds, charges, weight };
 }
 
 /** Sanity helper: the daughters must add up to the parent. */
