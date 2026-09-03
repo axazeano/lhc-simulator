@@ -1,0 +1,61 @@
+{
+  "$comment": "Cross sections in nanobarn for proton–proton collisions, tabulated against √s in GeV. Values are σ × branching ratio into the listed final state, integrated over all rapidity; the detector model applies the acceptance. Several entries are order-of-magnitude parametrisations for the game and are marked as such.",
+  "sqrtSGeV": [900, 2760, 5020, 7000, 8000, 13000, 13600, 14000],
+  "processes": [
+    {
+      "id": "inelastic",
+      "kind": "inelastic",
+      "crossSectionNb": [52000000, 62800000, 68000000, 73000000, 74700000, 79500000, 80000000, 80500000],
+      "source": "ALICE, Eur. Phys. J. C 73 (2013) 2456, arXiv:1208.4968 (0.9, 2.76, 7 TeV); TOTEM, Eur. Phys. J. C 79 (2019) 103, arXiv:1712.06153 (13 TeV). Intermediate points interpolated."
+    },
+    {
+      "id": "jpsi_mumu",
+      "kind": "resonance",
+      "particle": "jpsi",
+      "finalState": "mumu",
+      "crossSectionNb": [800, 1500, 2200, 2500, 2700, 3500, 3600, 3700],
+      "source": "Order of magnitude from inclusive J/ψ measurements: ALICE, Eur. Phys. J. C 77 (2017) 392, arXiv:1702.00557 (13 TeV midrapidity); LHCb, JHEP 10 (2015) 172, arXiv:1509.00771 (13 TeV forward). Extrapolated to full rapidity and multiplied by BR(J/ψ→μμ) = 5.96 %. Simplification: ±50 %."
+    },
+    {
+      "id": "upsilon1s_mumu",
+      "kind": "resonance",
+      "particle": "upsilon1s",
+      "finalState": "mumu",
+      "crossSectionNb": [3, 6, 9, 11, 12, 15, 15.5, 16],
+      "source": "Order of magnitude from CMS, Phys. Lett. B 749 (2015) 14, arXiv:1501.07750 (7 TeV) and LHCb, JHEP 07 (2018) 134, arXiv:1804.09214 (13 TeV), extrapolated to full rapidity. Simplification: ±50 %."
+    },
+    {
+      "id": "upsilon2s_mumu",
+      "kind": "resonance",
+      "particle": "upsilon2s",
+      "finalState": "mumu",
+      "crossSectionNb": [0.8, 1.6, 2.4, 3, 3.2, 4, 4.2, 4.3],
+      "source": "Ratio Υ(2S)/Υ(1S) ≈ 0.27 from CMS arXiv:1501.07750, applied to the Υ(1S) row."
+    },
+    {
+      "id": "upsilon3s_mumu",
+      "kind": "resonance",
+      "particle": "upsilon3s",
+      "finalState": "mumu",
+      "crossSectionNb": [0.4, 0.8, 1.2, 1.4, 1.6, 2, 2.1, 2.1],
+      "source": "Ratio Υ(3S)/Υ(1S) ≈ 0.13 from CMS arXiv:1501.07750, applied to the Υ(1S) row."
+    },
+    {
+      "id": "z_mumu",
+      "kind": "resonance",
+      "particle": "z",
+      "finalState": "mumu",
+      "crossSectionNb": [0.12, 0.45, 0.72, 0.99, 1.13, 1.98, 2.05, 2.12],
+      "source": "ATLAS, Phys. Lett. B 759 (2016) 601, arXiv:1603.09222 (13 TeV: σ·BR(Z→ℓℓ) = 1.98 nb); ATLAS, Eur. Phys. J. C 77 (2017) 367, arXiv:1612.03016 (7 TeV: 0.99 nb). Other points interpolated with the parton-luminosity trend."
+    },
+    {
+      "id": "continuum_mumu",
+      "kind": "continuum",
+      "finalState": "mumu",
+      "massRangeGeV": [2, 200],
+      "powerLawIndex": 3.5,
+      "crossSectionNb": [400, 900, 1300, 1500, 1600, 2000, 2050, 2100],
+      "source": "Game parametrisation of the smooth dimuon background (Drell–Yan γ* and combinatorial pairs from heavy-flavour decays) as a single power law dσ/dm ∝ m^-3.5. Normalised so that signal-to-background is about 3 at the J/ψ and about 10 at the Z, consistent in order of magnitude with the published CMS and ATLAS dimuon spectra. Physics: https://en.wikipedia.org/wiki/Drell%E2%80%93Yan_process"
+    }
+  ]
+}

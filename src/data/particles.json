@@ -1,0 +1,10 @@
+{
+  "muon": { "massGeV": 0.1056583755, "widthGeV": 0, "source": "PDG 2024, https://pdg.lbl.gov/" },
+  "jpsi": { "massGeV": 3.0969, "widthGeV": 0.0000926, "source": "PDG 2024, J/ψ(1S), https://pdg.lbl.gov/" },
+  "upsilon1s": { "massGeV": 9.4604, "widthGeV": 0.00005402, "source": "PDG 2024, Υ(1S), https://pdg.lbl.gov/" },
+  "upsilon2s": { "massGeV": 10.02326, "widthGeV": 0.00003198, "source": "PDG 2024, Υ(2S), https://pdg.lbl.gov/" },
+  "upsilon3s": { "massGeV": 10.3552, "widthGeV": 0.00002032, "source": "PDG 2024, Υ(3S), https://pdg.lbl.gov/" },
+  "z": { "massGeV": 91.1876, "widthGeV": 2.4952, "source": "PDG 2024, Z boson, https://pdg.lbl.gov/" },
+  "w": { "massGeV": 80.3692, "widthGeV": 2.085, "source": "PDG 2024, W boson, https://pdg.lbl.gov/" },
+  "higgs": { "massGeV": 125.2, "widthGeV": 0.0037, "source": "PDG 2024, H boson, https://pdg.lbl.gov/" }
+}

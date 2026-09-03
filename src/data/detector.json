@@ -1,0 +1,27 @@
+{
+  "etaMax": {
+    "value": 2.5,
+    "unit": "",
+    "source": "ATLAS and CMS inner trackers cover |η| < 2.5, e.g. CMS, JINST 3 (2008) S08004."
+  },
+  "muonPtResolutionConstant": {
+    "value": 0.012,
+    "unit": "",
+    "source": "Muon momentum resolution of about 1–2 % for pT below 100 GeV in the barrel, CMS JINST 3 (2008) S08004; ATLAS JINST 3 (2008) S08003. Simplification: σ(pT)/pT = a ⊕ b·pT with constant a."
+  },
+  "muonPtResolutionSlope": {
+    "value": 0.0001,
+    "unit": "1/GeV",
+    "source": "Resolution degrades to roughly 10 % at 1 TeV, CMS JINST 3 (2008) S08004. Simplification: linear term b."
+  },
+  "muonEfficiency": {
+    "value": 0.9,
+    "unit": "",
+    "source": "Muon reconstruction and identification efficiencies are typically 90–98 %, e.g. CMS, JINST 13 (2018) P06015. Simplification: a single value."
+  },
+  "photonEnergyResolution": {
+    "value": 0.015,
+    "unit": "",
+    "source": "Electromagnetic calorimeter resolution of about 1–2 % for photons above 50 GeV, CMS JINST 3 (2008) S08004. Simplification: constant."
+  }
+}
