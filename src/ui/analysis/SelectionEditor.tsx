@@ -8,6 +8,8 @@ interface Props {
   overlayId: string | null;
   fills: { fill: number; records: number }[];
   stats: { passed: number; weight: number; total: number } | null;
+  /** Signal, background and significance in the search window for this selection and, if any, the overlay. */
+  window: { label: string; signal: number; background: number; significance: number; overlay?: { signal: number; background: number; significance: number } } | null;
   ptRange: [number, number];
   massRange: [number, number];
   onSelect(id: string): void;
@@ -64,6 +66,7 @@ export function SelectionEditor(props: Props) {
         </label>
         <label>
           <span>{t('selection.ptMin')}</span>
+          <span className="why">{t('why.ptMin')}</span>
           <span className="knob-field">
             <input
               type="number"
@@ -79,6 +82,7 @@ export function SelectionEditor(props: Props) {
         </label>
         <label>
           <span>{t('selection.leadingPt')}</span>
+          <span className="why">{t('why.leadingPt')}</span>
           <span className="knob-field">
             <input type="number" className="mono knob-input" step={1} value={optional(active.leadingPtMinGeV)} onChange={(e) => set({ leadingPtMinGeV: numberOrNull(e.target.value) })} />
             <span className="knob-unit">{t('unit.GeV')}</span>
@@ -86,10 +90,12 @@ export function SelectionEditor(props: Props) {
         </label>
         <label>
           <span>{t('selection.etaMax')}</span>
+          <span className="why">{t('why.etaMax')}</span>
           <input type="number" className="mono knob-input" step={0.1} min={0} max={2.5} value={optional(active.etaMax)} onChange={(e) => set({ etaMax: numberOrNull(e.target.value) })} />
         </label>
         <label>
           <span>{t('selection.charge')}</span>
+          <span className="why">{t('why.charge')}</span>
           <select value={active.charge} onChange={(e) => set({ charge: e.target.value as Selection['charge'] })}>
             {(['any', 'opposite', 'same'] as const).map((c) => (
               <option key={c} value={c}>
@@ -100,6 +106,7 @@ export function SelectionEditor(props: Props) {
         </label>
         <label>
           <span>{t('selection.mass')}</span>
+          <span className="why">{t('why.mass')}</span>
           <span className="window-inputs">
             <input type="number" step={0.1} min={props.massRange[0]} max={props.massRange[1]} value={optional(active.massMinGeV)} onChange={(e) => set({ massMinGeV: numberOrNull(e.target.value) })} />
             <span>–</span>
@@ -109,6 +116,7 @@ export function SelectionEditor(props: Props) {
         </label>
         <label>
           <span>{t('selection.fills')}</span>
+          <span className="why">{t('why.fills')}</span>
           <span className="checks">
             <label>
               <input type="checkbox" checked={active.fills === null} onChange={(e) => set({ fills: e.target.checked ? null : props.fills.map((f) => f.fill) })} />
@@ -148,6 +156,34 @@ export function SelectionEditor(props: Props) {
           </select>
         </label>
       </div>
+
+      {props.window && (
+        <div className="readout-group window-readout">
+          <span className="eyebrow">{t('selection.windowTitle', { window: props.window.label })}</span>
+          <div className="readout">
+            <span className="readout-label">{t('analysis.signal')}</span>
+            <span className="readout-value mono">
+              {number(Math.round(props.window.signal))}
+              {props.window.overlay && <span className="dim"> / {number(Math.round(props.window.overlay.signal))}</span>}
+            </span>
+          </div>
+          <div className="readout">
+            <span className="readout-label">{t('analysis.background')}</span>
+            <span className="readout-value mono">
+              {number(Math.round(props.window.background))}
+              {props.window.overlay && <span className="dim"> / {number(Math.round(props.window.overlay.background))}</span>}
+            </span>
+          </div>
+          <div className={`readout ${props.window.significance >= 5 ? 'ok' : props.window.significance >= 3 ? 'warn' : ''}`}>
+            <span className="readout-label">{t('analysis.significance')}</span>
+            <span className="readout-value mono">
+              {number(props.window.significance, { maximumFractionDigits: 1 })} σ
+              {props.window.overlay && <span className="dim"> / {number(props.window.overlay.significance, { maximumFractionDigits: 1 })} σ</span>}
+            </span>
+          </div>
+          <p className="note">{t('selection.windowNote')}</p>
+        </div>
+      )}
 
       {props.stats && (
         <div className="readout-group">

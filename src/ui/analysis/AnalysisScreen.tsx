@@ -15,6 +15,8 @@ import { FitPanel } from './FitPanel';
 import { PlotCanvas } from './PlotCanvas';
 import { SelectionEditor } from './SelectionEditor';
 import { PassportPanel } from './PassportPanel';
+import { ResearchGuide, type GuideStep } from './ResearchGuide';
+import { analyseWindow } from '../../physics/analysis/window';
 import type { CatalogEntry } from './catalog';
 import type { HiddenParticle } from '../../physics/collision/hidden';
 
@@ -89,6 +91,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
   const [guess, setGuess] = useState({ mean: 91, sigma: 2 });
   const [fit, setFit] = useState<PeakFit | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
+  const [passportProgress, setPassportProgress] = useState({ response: false, compared: false });
 
   useEffect(() => {
     try {
@@ -178,6 +181,36 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
 
   const integrated = integratedLuminosityDisplay(run.integratedLuminosityM2);
 
+  // Live signal / background in the search window: the fitted peak's ±2σ, or the fit range.
+  const windowReadout = useMemo(() => {
+    if (variable !== 'mass') return null;
+    const win = fit ? { minGeV: fit.mean - 2 * fit.sigma, maxGeV: fit.mean + 2 * fit.sigma } : { minGeV: fitRange.min, maxGeV: fitRange.max };
+    if (!(win.maxGeV > win.minGeV)) return null;
+    const fullSpec = { min: store.spec.min, max: store.spec.max, bins: store.spec.bins };
+    const a = analyseWindow(buildHistogram(store, active, 'mass', fullSpec).histogram, win);
+    const o = overlay ? analyseWindow(buildHistogram(store, overlay, 'mass', fullSpec).histogram, win) : null;
+    const label = `${number(win.minGeV, { maximumFractionDigits: 1 })}–${number(win.maxGeV, { maximumFractionDigits: 1 })} ${t('unit.GeV')}`;
+    return {
+      label,
+      signal: a.signal,
+      background: a.background,
+      significance: a.significance,
+      ...(o ? { overlay: { signal: o.signal, background: o.background, significance: o.significance } } : {}),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variable, fit, fitRange, store, runVersion, active, overlay]);
+
+  const confirmed = catalog.some((e) => e.channel === channel && e.claim?.status === 'confirmed');
+  const guideSteps: GuideStep[] = [
+    { id: 'record', done: store.size > 0, target: '.analysis-head' },
+    { id: 'look', done: store.size > 0 && (fit !== null || variable === 'mass'), target: '.plot-panel' },
+    { id: 'select', done: (windowReadout?.significance ?? 0) >= 3, target: '.selection-editor' },
+    { id: 'fit', done: fit !== null && fit.converged, target: '.fit-panel' },
+    { id: 'response', done: fit !== null && passportProgress.response, target: '.passport-panel' },
+    { id: 'compare', done: fit !== null && passportProgress.compared, target: '.passport-panel' },
+    { id: 'claim', done: confirmed || catalog.some((e) => e.channel === channel && e.matchedId !== null), target: '.passport-panel' },
+  ];
+
   return (
     <div className="analysis-screen">
       <header className="analysis-head">
@@ -232,6 +265,8 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
         </div>
       </header>
 
+      <ResearchGuide steps={guideSteps} />
+
       <div className="analysis-grid">
         <SelectionEditor
           selections={list}
@@ -239,6 +274,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
           overlayId={overlayId}
           fills={fills}
           stats={{ passed: built.passed, weight: built.weight, total: totalWeight }}
+          window={windowReadout}
           ptRange={definition.ptMinRange}
           massRange={[definition.spec.min, definition.spec.max]}
           onSelect={(id) => setActiveByChannel((a) => ({ ...a, [channel]: id }))}
@@ -312,6 +348,7 @@ export function AnalysisScreen({ run, runVersion, channel, onChannel, onExplain,
           hidden={hidden}
           catalog={catalog}
           onCatalog={onCatalog}
+          onProgress={setPassportProgress}
         />
 
         <EventTable store={store} version={runVersion} mask={mask} selected={selectedEvent} onSelect={setSelectedEvent} />

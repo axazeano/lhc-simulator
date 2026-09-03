@@ -37,6 +37,7 @@ interface Props {
   hidden: HiddenParticle[];
   catalog: CatalogEntry[];
   onCatalog(entries: CatalogEntry[]): void;
+  onProgress?(state: { response: boolean; compared: boolean }): void;
 }
 
 /** Significance required to claim a discovery, after the look-elsewhere correction. */
@@ -56,6 +57,10 @@ export function PassportPanel(props: Props) {
     setResponse(null);
     setKnown(null);
   }, [fit, channel]);
+  useEffect(() => {
+    props.onProgress?.({ response: response !== null, compared: known !== null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [response, known]);
 
   // Charge of the products: compare opposite-sign and same-sign yields in the peak window.
   const chargeInferred = useMemo(() => {
