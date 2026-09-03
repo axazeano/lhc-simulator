@@ -32,7 +32,8 @@ describe('event generator', () => {
   it('J/ψ is effectively a delta function', () => {
     const rng = new Random(13);
     for (let i = 0; i < 100; i++) {
-      expect(Math.abs(generateEvent(jpsi, 13000, rng).massGeV - PARTICLES.jpsi.massGeV)).toBeLessThan(0.001);
+      // Within ±40 widths, i.e. under 4 MeV, of a 3.1 GeV peak.
+      expect(Math.abs(generateEvent(jpsi, 13000, rng).massGeV - PARTICLES.jpsi.massGeV)).toBeLessThan(0.004);
     }
   });
 

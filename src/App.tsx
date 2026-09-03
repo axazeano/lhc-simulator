@@ -129,7 +129,7 @@ export function App() {
       if (now - lastCollect >= COLLECT_INTERVAL_MS) {
         lastCollect = now;
         if (pendingLuminosityM2 > 0 && isColliding(state)) {
-          run.collect(pendingLuminosityM2, centerOfMassEnergyCollider(state.energyGeV), cutsRef.current);
+          run.collect(pendingLuminosityM2, centerOfMassEnergyCollider(state.energyGeV));
           pendingLuminosityM2 = 0;
           setRunVersion((v) => v + 1);
         } else {
@@ -161,10 +161,11 @@ export function App() {
       : crossSectionNb(processById('inelastic'), centerOfMassEnergyCollider(machine.energyGeV)) * 1e-33 * luminosityCm2S;
 
   // Readouts of the run are derived on every version bump (about ten times per second).
-  const snapshot = useMemo(() => run.snapshot(), [run, runVersion]);
-  const histogram = run.histograms[channel];
-  const analysis = useMemo(() => analyseWindow(histogram, massWindow), [histogram, runVersion, massWindow]);
   const cuts = cutsByChannel[channel];
+  // Offline analysis: the histogram is rebuilt from the recorded events for the current threshold.
+  const histogram = useMemo(() => run.histogramFor(channel, cuts), [run, runVersion, channel, cuts]);
+  const snapshot = useMemo(() => run.snapshot(cutsByChannel), [run, runVersion, cutsByChannel]);
+  const analysis = useMemo(() => analyseWindow(histogram, massWindow), [histogram, massWindow]);
 
   const fiveSigmaRef = useRef(false);
   useEffect(() => {
@@ -274,8 +275,6 @@ export function App() {
 
   const onCuts = (next: SelectionCuts) => {
     setCutsByChannel((c) => ({ ...c, [channel]: next }));
-    run.resetChannel(channel);
-    setRunVersion((v) => v + 1);
   };
 
   const onChannel = (next: Channel) => {
@@ -382,6 +381,7 @@ export function App() {
             logScale={logScale}
             showKnownMasses={showKnownMasses}
             entries={snapshot.entriesByChannel[channel]}
+            recorded={snapshot.recordedByChannel[channel]}
             analysis={analysis}
             onChannel={onChannel}
             onCuts={onCuts}

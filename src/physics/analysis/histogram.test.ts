@@ -15,6 +15,15 @@ describe('histogram', () => {
     expect(h.integral(-5, 1)).toBe(1);
   });
 
+  it('adjacent integrals never share a bin', () => {
+    const h = new Histogram({ min: 80, max: 200, bins: 2400 });
+    for (let b = 0; b < 2400; b++) h.addCounts(b, 1);
+    let total = 0;
+    for (let lo = 105; lo < 121 - 1e-9; lo += 0.8) total += h.integral(lo, Math.min(121, lo + 0.8));
+    expect(total).toBe(h.integral(105, 121));
+    expect(h.integral(105, 121)).toBe(320);
+  });
+
   it('rebins a range into drawing columns', () => {
     const h = new Histogram({ min: 0, max: 10, bins: 100 });
     for (let x = 0.05; x < 10; x += 0.1) h.fill(x);

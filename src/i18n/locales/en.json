@@ -95,15 +95,14 @@
   "analysis.windowMax": "to",
   "analysis.ptCut": "Muon pT threshold",
   "analysis.reset": "Reset data",
-  "analysis.resetNote": "Changing the pT threshold resets the data, like a new run with a different trigger.",
   "analysis.entries": "Muon pairs in the histogram",
   "analysis.observed": "Events in window",
   "analysis.background": "Background from sidebands",
   "analysis.signal": "Signal",
   "analysis.significance": "Significance S/√B",
-  "hint.histogram.what": "For every pair of muons the detector measures the momenta and we compute the invariant mass: the mass of a particle that could have decayed into them. Random pairs give a smooth background; a real particle gives a peak at its mass.",
+  "hint.histogram.what": "Every recorded event is a set of measured momenta. From them the invariant mass is computed: the mass of a particle that could have decayed into them. The histogram is rebuilt from the recorded events whenever the selection changes. Random pairs give a smooth background; a real particle gives a peak at its mass.",
   "hint.window.what": "Count the events inside a mass window: that is S + B, signal plus background. Estimate the background B from two sidebands of the same total width, assuming it falls smoothly between them. Subtract it to get the signal S. The significance S/√B says how many times the signal exceeds the random scatter of the background. Five sigma counts as a discovery.",
-  "hint.ptCut.what": "Muons with low transverse momentum never reach the muon chambers, and a low threshold lets in many random pairs. A high threshold kills the light particles: a J/ψ gives muons of only 1.5 GeV each.",
+  "hint.ptCut.what": "Muons with low transverse momentum never reach the muon chambers, and a low threshold lets in many random pairs. A high threshold kills the light particles: a J/ψ gives muons of only 1.5 GeV each. The trigger decides what to record; the analysis threshold is applied afterwards to the recorded events and can only be higher than the trigger's.",
   "histogram.axisMass": "m(μ⁺μ⁻), GeV",
   "histogram.axisCounts": "Events",
   "histogram.hover": "{mass} GeV: {count}",
@@ -351,5 +350,7 @@
   "glossary.significance.term": "Significance",
   "glossary.significance.text": "How many times the signal exceeds the random scatter of the background: S/√B. Measured in sigma, standard deviations.",
   "glossary.fivesigma.term": "Five sigma",
-  "glossary.fivesigma.text": "The threshold for announcing a discovery in particle physics: the chance that the background fakes such a signal is about one in 3.5 million."
+  "glossary.fivesigma.text": "The threshold for announcing a discovery in particle physics: the chance that the background fakes such a signal is about one in 3.5 million.",
+  "analysis.recorded": "Events recorded to disk",
+  "analysis.offlineNote": "The trigger records events above {min} GeV. The analysis threshold is applied to the recorded data and can be changed without loss, as in an offline analysis."
 }

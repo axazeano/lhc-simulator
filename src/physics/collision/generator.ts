@@ -33,13 +33,15 @@ const Z_MASS = PARTICLES.z.massGeV;
 const Z_WIDTH = PARTICLES.z.widthGeV;
 /** Lowest dilepton mass in the ZZ* chain, in GeV. */
 const MIN_PAIR_MASS = 12;
+/** Resonance masses are generated within this many widths of the peak. */
+export const BREIT_WIGNER_REACH = 40;
 
 export function sampleParentMass(process: ProcessDefinition, rng: Random): number {
   if (process.kind === 'resonance' && process.particle) {
     const particle = PARTICLES[process.particle];
-    // Keep the tails physical: sample within ±10 widths of the peak (and above threshold)
+    // Keep the tails physical: sample within ±40 widths of the peak (and above threshold)
     // from the truncated distribution, so nothing accumulates at the cut.
-    const limit = 10 * particle.widthGeV;
+    const limit = BREIT_WIGNER_REACH * particle.widthGeV;
     const lo = Math.max(particle.massGeV - limit, 2 * MUON_MASS + 1e-6);
     return rng.breitWignerTruncated(particle.massGeV, particle.widthGeV, lo, particle.massGeV + limit);
   }

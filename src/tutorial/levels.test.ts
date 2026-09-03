@@ -16,6 +16,7 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
       collisions: 0,
       visibleByProcess: {},
       simulatedEvents: 0,
+      recordedByChannel: { mumu: 0, gammagamma: 0, fourlepton: 0 },
       entriesByChannel: { mumu: 0, gammagamma: 0, fourlepton: 0 },
     },
     channel: 'mumu',

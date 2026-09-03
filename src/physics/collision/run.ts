@@ -1,49 +1,35 @@
 import { Histogram, type HistogramSpec } from '../analysis/histogram';
-import { DEFAULT_DETECTOR, reconstructEventMass, type DetectorModel, type SelectionCuts } from '../detector/detector';
+import { DEFAULT_DETECTOR, type DetectorModel, type SelectionCuts } from '../detector/detector';
 import { Random } from '../random';
 import { CHANNELS, CHANNEL_DEFINITIONS, type Channel } from './channels';
-import { generateEvent, generateWeightedEvent } from './generator';
+import { buildEventPool, drawFromPool, reconstructRecord, type EventPool, type Region } from './eventPool';
+import { EventStore } from './eventStore';
+import { generateEvent } from './generator';
 import { PROCESSES, crossSectionNb, expectedCount, type ProcessDefinition } from './processes';
 
 /**
- * A data-taking run: turns integrated luminosity into invariant-mass histograms, one per channel.
+ * A data-taking run: turns integrated luminosity into recorded events, one store per channel.
  *
- * Two regimes keep it honest and fast:
- * - When a process is expected to produce only a handful of events in a step, every event is
- *   generated and passed through the detector individually.
- * - When thousands are expected, the run uses a template (the mass distribution of that
- *   process after the detector, built once from a large Monte Carlo sample) and draws
- *   Poisson-distributed counts per bin. Statistically this is the same as simulating each event.
+ * Recording works like a real trigger with prescales:
+ * - Every channel records at its lowest pT threshold; the analysis threshold is applied later,
+ *   offline, to the stored events, so it can be changed without losing data.
+ * - Rare processes are simulated and recorded one by one (weight 1).
+ * - Frequent processes are prescaled: a fixed number of representative events per step is
+ *   drawn from a pre-built pool and each stands for `weight` real events.
  */
 
 export const DIMUON_HISTOGRAM: HistogramSpec = CHANNEL_DEFINITIONS.mumu.spec;
 
-/** Below this expected count per step, events are simulated one by one. */
+/** Below this expected (raw) count per step, events are fully simulated one by one. */
 const INDIVIDUAL_LIMIT = 300;
-/** Keep sampling until the template holds this many accepted events, within the sample budget. */
-const TEMPLATE_MIN_ACCEPTED = 12000;
-const TEMPLATE_MAX_SAMPLES = 400000;
-/**
- * Templates are smoothed with a Gaussian kernel. For resonances the kernel is a quarter of the
- * detector mass resolution (about 0.9 %), which widens a peak by only 3 % but removes the empty
- * bins that a finite Monte Carlo sample would otherwise freeze into the template. The continuum
- * has no features of its own, so it gets a much wider kernel and a larger sample.
- */
-const RESONANCE_SMOOTHING_FRACTION = 0.25 * 0.009;
-const CONTINUUM_SMOOTHING_FRACTION = 0.03;
-const CONTINUUM_MIN_ACCEPTED = 12000;
-/**
- * In the sparse tails of a resonance template the kernel is widened by this factor, so that a
- * handful of Monte Carlo events does not freeze into lumps when scaled to millions of events.
- * The peak itself, where the template is dense, keeps the narrow kernel.
- */
-const TAIL_SMOOTHING_FACTOR = 6;
-
-interface Template {
-  acceptance: number;
-  fractions: Float64Array;
-  nonZeroBins: Int32Array;
-}
+/** Below this expected visible count per step, pool draws are recorded one by one with weight 1. */
+const PRESCALE_START = 150;
+/** Prescaled records per process per step grow with the expected count, within these bounds. */
+const PRESCALED_MIN = 150;
+const PRESCALED_MAX = 600;
+const EVENTS_PER_RECORD = 50;
+/** High-mass events are recorded one by one up to this many per process per step, then prescaled. */
+const UNPRESCALED_CAP = 3000;
 
 export type CutsByChannel = Record<Channel, SelectionCuts>;
 
@@ -53,11 +39,20 @@ export const DEFAULT_CUTS: CutsByChannel = {
   fourlepton: { ptMinGeV: CHANNEL_DEFINITIONS.fourlepton.defaultPtMinGeV },
 };
 
+/** The trigger threshold each channel records at: the lowest the analysis knob allows. */
+export const RECORDING_CUTS: CutsByChannel = {
+  mumu: { ptMinGeV: CHANNEL_DEFINITIONS.mumu.ptMinRange[0] },
+  gammagamma: { ptMinGeV: CHANNEL_DEFINITIONS.gammagamma.ptMinRange[0] },
+  fourlepton: { ptMinGeV: CHANNEL_DEFINITIONS.fourlepton.ptMinRange[0] },
+};
+
 export interface RunSnapshot {
   integratedLuminosityM2: number;
   collisions: number;
+  /** Represented (weighted) events per process after the given cuts. */
   visibleByProcess: Record<string, number>;
   simulatedEvents: number;
+  recordedByChannel: Record<Channel, number>;
   entriesByChannel: Record<Channel, number>;
 }
 
@@ -66,68 +61,78 @@ function channelOf(process: ProcessDefinition): Channel | null {
 }
 
 export class CollisionRun {
-  readonly histograms: Record<Channel, Histogram>;
+  readonly stores: Record<Channel, EventStore>;
   integratedLuminosityM2 = 0;
   collisions = 0;
   simulatedEvents = 0;
-  visibleByProcess: Record<string, number> = {};
   private readonly rng: Random;
-  private readonly templates = new Map<string, Template>();
+  private readonly pools = new Map<string, EventPool>();
+  private readonly detector: DetectorModel;
 
-  constructor(seed = 12345) {
+  constructor(seed = 12345, detector: DetectorModel = DEFAULT_DETECTOR) {
     this.rng = new Random(seed);
-    this.histograms = {
-      mumu: new Histogram(CHANNEL_DEFINITIONS.mumu.spec),
-      gammagamma: new Histogram(CHANNEL_DEFINITIONS.gammagamma.spec),
-      fourlepton: new Histogram(CHANNEL_DEFINITIONS.fourlepton.spec),
+    this.detector = detector;
+    this.stores = {
+      mumu: new EventStore(CHANNEL_DEFINITIONS.mumu.spec),
+      gammagamma: new EventStore(CHANNEL_DEFINITIONS.gammagamma.spec),
+      fourlepton: new EventStore(CHANNEL_DEFINITIONS.fourlepton.spec),
     };
   }
 
-  /** The dimuon histogram, kept for convenience. */
+  /** Histogram of a channel after the analysis threshold. Cached inside the store. */
+  histogramFor(channel: Channel, cuts: SelectionCuts = DEFAULT_CUTS[channel]): Histogram {
+    return this.stores[channel].histogram(cuts.ptMinGeV);
+  }
+
+  /** The dimuon histogram at the default threshold, kept for convenience. */
   get histogram(): Histogram {
-    return this.histograms.mumu;
+    return this.histogramFor('mumu');
   }
 
   reset(): void {
-    for (const channel of CHANNELS) this.histograms[channel].reset();
+    for (const channel of CHANNELS) this.stores[channel].clear();
     this.integratedLuminosityM2 = 0;
     this.collisions = 0;
     this.simulatedEvents = 0;
-    this.visibleByProcess = {};
   }
 
-  /** Clear one channel's data, as if that trigger had just been reconfigured. */
+  /** Clear one channel's data. */
   resetChannel(channel: Channel): void {
-    this.histograms[channel].reset();
-    for (const process of PROCESSES) {
-      if (channelOf(process) === channel) delete this.visibleByProcess[process.id];
-    }
+    this.stores[channel].clear();
   }
 
-  snapshot(): RunSnapshot {
+  snapshot(cuts: CutsByChannel = DEFAULT_CUTS): RunSnapshot {
+    const visibleByProcess: Record<string, number> = {};
+    for (const channel of CHANNELS) {
+      for (const [index, count] of this.stores[channel].countByProcess(cuts[channel].ptMinGeV)) {
+        const process = PROCESSES[index];
+        if (process) visibleByProcess[process.id] = (visibleByProcess[process.id] ?? 0) + count;
+      }
+    }
     return {
       integratedLuminosityM2: this.integratedLuminosityM2,
       collisions: this.collisions,
-      visibleByProcess: { ...this.visibleByProcess },
+      visibleByProcess,
       simulatedEvents: this.simulatedEvents,
+      recordedByChannel: {
+        mumu: this.stores.mumu.size,
+        gammagamma: this.stores.gammagamma.size,
+        fourlepton: this.stores.fourlepton.size,
+      },
       entriesByChannel: {
-        mumu: this.histograms.mumu.entries,
-        gammagamma: this.histograms.gammagamma.entries,
-        fourlepton: this.histograms.fourlepton.entries,
+        mumu: this.histogramFor('mumu', cuts.mumu).entries,
+        gammagamma: this.histogramFor('gammagamma', cuts.gammagamma).entries,
+        fourlepton: this.histogramFor('fourlepton', cuts.fourlepton).entries,
       },
     };
   }
 
-  /** Record `deltaLuminosityM2` of collisions at √s with the given selection per channel. */
-  collect(
-    deltaLuminosityM2: number,
-    sqrtSGeV: number,
-    cuts: CutsByChannel = DEFAULT_CUTS,
-    detector: DetectorModel = DEFAULT_DETECTOR,
-  ): void {
+  /** Record `deltaLuminosityM2` of collisions at √s. */
+  collect(deltaLuminosityM2: number, sqrtSGeV: number): void {
     if (deltaLuminosityM2 <= 0) return;
     this.integratedLuminosityM2 += deltaLuminosityM2;
-    for (const process of PROCESSES) {
+    for (let index = 0; index < PROCESSES.length; index++) {
+      const process = PROCESSES[index]!;
       const sigma = crossSectionNb(process, sqrtSGeV);
       if (sigma <= 0) continue;
       const expected = expectedCount(sigma, deltaLuminosityM2);
@@ -137,76 +142,92 @@ export class CollisionRun {
       }
       const channel = channelOf(process);
       if (!channel) continue;
-      const channelCuts = cuts[channel];
       if (expected < INDIVIDUAL_LIMIT) {
-        this.collectIndividually(process, channel, expected, sqrtSGeV, channelCuts, detector);
+        this.recordIndividually(process, index, channel, expected, sqrtSGeV);
       } else {
-        this.collectFromTemplate(process, channel, expected, sqrtSGeV, channelCuts, detector);
+        this.recordPrescaled(process, index, channel, expected, sqrtSGeV);
       }
     }
   }
 
-  private addVisible(processId: string, count: number): void {
-    this.visibleByProcess[processId] = (this.visibleByProcess[processId] ?? 0) + count;
-  }
-
-  private collectIndividually(
-    process: ProcessDefinition,
-    channel: Channel,
-    expected: number,
-    sqrtSGeV: number,
-    cuts: SelectionCuts,
-    detector: DetectorModel,
-  ): void {
+  private recordIndividually(process: ProcessDefinition, index: number, channel: Channel, expected: number, sqrtSGeV: number): void {
     const n = this.rng.poisson(expected);
-    const histogram = this.histograms[channel];
+    const store = this.stores[channel];
+    const cuts = RECORDING_CUTS[channel];
     for (let i = 0; i < n; i++) {
       const event = generateEvent(process, sqrtSGeV, this.rng);
-      const mass = reconstructEventMass(event.daughters, event.kinds, detector, cuts, this.rng);
       this.simulatedEvents += 1;
-      if (mass === null) continue;
-      histogram.fill(mass);
-      this.addVisible(process.id, 1);
+      const record = reconstructRecord(event.daughters, event.kinds, this.detector, cuts, this.rng);
+      if (!record) continue;
+      store.record({ massGeV: record.massGeV, minPtGeV: record.minPtGeV, sqrtSGeV, processIndex: index, weight: 1 }, this.rng);
+      store.keepForDisplay({
+        processId: process.id,
+        sqrtSGeV,
+        massGeV: record.massGeV,
+        particles: record.particles.map((vector, k) => ({ kind: event.kinds[k] ?? 'muon', vector })),
+      });
     }
   }
 
-  private collectFromTemplate(
-    process: ProcessDefinition,
+  private recordPrescaled(process: ProcessDefinition, index: number, channel: Channel, expected: number, sqrtSGeV: number): void {
+    const pool = this.pool(process, channel, sqrtSGeV);
+    const visibleExpected = expected * pool.acceptance;
+    if (visibleExpected <= 0) return;
+    // High-mass "physics stream": every event recorded, up to a cap. Low-mass bulk: prescaled.
+    this.recordFromRegion(pool, pool.high, index, channel, visibleExpected * pool.high.fraction, sqrtSGeV, UNPRESCALED_CAP);
+    this.recordFromRegion(pool, pool.low, index, channel, visibleExpected * pool.low.fraction, sqrtSGeV, PRESCALE_START);
+  }
+
+  /**
+   * Record `expected` visible events from a sub-pool. Below `oneByOneUpTo` each event is
+   * recorded with weight 1; above it a bounded number of records shares the total weight.
+   */
+  private recordFromRegion(
+    pool: EventPool,
+    region: Region,
+    index: number,
     channel: Channel,
     expected: number,
     sqrtSGeV: number,
-    cuts: SelectionCuts,
-    detector: DetectorModel,
+    oneByOneUpTo: number,
   ): void {
-    const template = this.template(process, channel, sqrtSGeV, cuts, detector);
-    const visibleExpected = expected * template.acceptance;
-    if (visibleExpected <= 0) return;
-    const histogram = this.histograms[channel];
-    let total = 0;
-    for (let i = 0; i < template.nonZeroBins.length; i++) {
-      const bin = template.nonZeroBins[i]!;
-      const lambda = visibleExpected * template.fractions[bin]!;
-      const count = this.rng.poisson(lambda);
-      if (count > 0) {
-        histogram.addCounts(bin, count);
-        total += count;
+    if (expected <= 0 || region.fraction <= 0) return;
+    const store = this.stores[channel];
+    if (expected < oneByOneUpTo) {
+      const n = this.rng.poisson(expected);
+      for (let i = 0; i < n; i++) {
+        const drawn = drawFromPool(pool, this.rng, region);
+        if (!drawn) return;
+        store.record({ massGeV: drawn.massGeV, minPtGeV: drawn.minPtGeV, sqrtSGeV, processIndex: index, weight: 1 }, this.rng);
       }
+      return;
     }
-    this.addVisible(process.id, total);
+    // Once prescaling starts, take at least as many records as the one-by-one limit, so the
+    // transition is seamless, and more as the expected count grows, up to the cap.
+    const cap = Math.max(PRESCALED_MAX, oneByOneUpTo);
+    const n = Math.min(cap, Math.max(oneByOneUpTo, PRESCALED_MIN, Math.ceil(expected / EVENTS_PER_RECORD)));
+    const scale = expected / n;
+    for (let i = 0; i < n; i++) {
+      const drawn = drawFromPool(pool, this.rng, region, 'mixed');
+      if (!drawn) return;
+      store.record({ massGeV: drawn.massGeV, minPtGeV: drawn.minPtGeV, sqrtSGeV, processIndex: index, weight: scale * drawn.weight }, this.rng);
+    }
   }
 
-  private template(
-    process: ProcessDefinition,
-    channel: Channel,
-    sqrtSGeV: number,
-    cuts: SelectionCuts,
-    detector: DetectorModel,
-  ): Template {
-    const key = `${process.id}|${Number(sqrtSGeV.toPrecision(3))}|${cuts.ptMinGeV}`;
-    const cached = this.templates.get(key);
+  private pool(process: ProcessDefinition, channel: Channel, sqrtSGeV: number): EventPool {
+    const key = `${process.id}|${Number(sqrtSGeV.toPrecision(3))}`;
+    const cached = this.pools.get(key);
     if (cached) return cached;
-    const built = buildTemplate(process, sqrtSGeV, cuts, detector, this.histograms[channel].spec, new Random(hashKey(key)));
-    this.templates.set(key, built);
+    const built = buildEventPool(
+      process,
+      sqrtSGeV,
+      RECORDING_CUTS[channel],
+      this.detector,
+      CHANNEL_DEFINITIONS[channel].spec,
+      new Random(hashKey(key)),
+      CHANNEL_DEFINITIONS[channel].unprescaledFromGeV,
+    );
+    this.pools.set(key, built);
     return built;
   }
 }
@@ -218,92 +239,4 @@ function hashKey(key: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
-}
-
-export function buildTemplate(
-  process: ProcessDefinition,
-  sqrtSGeV: number,
-  cuts: SelectionCuts,
-  detector: DetectorModel,
-  spec: HistogramSpec,
-  rng: Random,
-  minAccepted = TEMPLATE_MIN_ACCEPTED,
-  maxSamples = TEMPLATE_MAX_SAMPLES,
-): Template {
-  const histogram = new Histogram(spec);
-  const isContinuum = process.kind === 'continuum';
-  const target = isContinuum ? Math.max(minAccepted, CONTINUUM_MIN_ACCEPTED) : minAccepted;
-  let accepted = 0;
-  let acceptedWeight = 0;
-  let samples = 0;
-  while (samples < maxSamples && accepted < target) {
-    samples += 1;
-    const event = generateWeightedEvent(process, sqrtSGeV, rng);
-    const mass = reconstructEventMass(event.daughters, event.kinds, detector, cuts, rng);
-    if (mass === null) continue;
-    accepted += 1;
-    acceptedWeight += event.weight;
-    histogram.fill(mass, event.weight);
-  }
-  const fractions = new Float64Array(spec.bins);
-  const nonZero: number[] = [];
-  if (acceptedWeight > 0) {
-    const smoothed = isContinuum
-      ? smoothCounts(histogram, CONTINUUM_SMOOTHING_FRACTION)
-      : smoothAdaptive(histogram, RESONANCE_SMOOTHING_FRACTION, TAIL_SMOOTHING_FACTOR);
-    for (let b = 0; b < spec.bins; b++) {
-      const c = smoothed[b]!;
-      if (c > 0) {
-        fractions[b] = c / acceptedWeight;
-        nonZero.push(b);
-      }
-    }
-  }
-  return { acceptance: acceptedWeight / samples, fractions, nonZeroBins: Int32Array.from(nonZero) };
-}
-
-/**
- * Spread every bin into a Gaussian whose width is `fraction` of the bin's mass, at least
- * 0.7 bins. The total is preserved.
- */
-export function smoothCounts(histogram: Histogram, fraction: number): Float64Array {
-  const { spec, counts, width } = histogram;
-  const out = new Float64Array(spec.bins);
-  for (let b = 0; b < spec.bins; b++) {
-    const c = counts[b]!;
-    if (c <= 0) continue;
-    const sigma = Math.max(0.7, (fraction * histogram.binCenter(b)) / width);
-    const reach = Math.ceil(3 * sigma);
-    const lo = Math.max(0, b - reach);
-    const hi = Math.min(spec.bins - 1, b + reach);
-    let norm = 0;
-    for (let j = lo; j <= hi; j++) norm += Math.exp(-((j - b) ** 2) / (2 * sigma * sigma));
-    for (let j = lo; j <= hi; j++) out[j]! += (c * Math.exp(-((j - b) ** 2) / (2 * sigma * sigma))) / norm;
-  }
-  return out;
-}
-
-/**
- * Two-scale smoothing: a narrow kernel where the template is dense (the peak) blended into a
- * wide kernel where it is sparse (the tails). The blend weight follows the narrow-smoothed
- * density relative to its maximum, so the transition is gradual. The total is preserved.
- */
-export function smoothAdaptive(histogram: Histogram, fraction: number, tailFactor: number): Float64Array {
-  const narrow = smoothCounts(histogram, fraction);
-  const wide = smoothCounts(histogram, fraction * tailFactor);
-  let max = 0;
-  for (let b = 0; b < narrow.length; b++) if (narrow[b]! > max) max = narrow[b]!;
-  if (max <= 0) return narrow;
-  const out = new Float64Array(narrow.length);
-  const dense = 0.05 * max;
-  let total = 0;
-  let sumIn = 0;
-  for (let b = 0; b < narrow.length; b++) {
-    const w = Math.min(1, narrow[b]! / dense);
-    out[b] = w * narrow[b]! + (1 - w) * wide[b]!;
-    total += out[b]!;
-    sumIn += histogram.counts[b]!;
-  }
-  if (total > 0) for (let b = 0; b < out.length; b++) out[b]! *= sumIn / total;
-  return out;
 }

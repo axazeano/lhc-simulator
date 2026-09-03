@@ -41,13 +41,15 @@ export class Histogram {
     this.entries += count;
   }
 
-  /** Sum of counts for values in [from, to). Partial bins are included in full. */
+  /**
+   * Sum of counts for values in [from, to). The edges are snapped to the nearest bin
+   * boundary, so adjacent ranges never share or skip a bin because of floating-point noise.
+   */
   integral(from: number, to: number): number {
-    const first = Math.max(0, this.binOf(Math.max(from, this.spec.min)));
-    const last = this.binOf(Math.min(to, this.spec.max) - 1e-9);
-    if (last < 0 || first > last) return 0;
+    const first = Math.min(this.spec.bins, Math.max(0, Math.round((from - this.spec.min) / this.width)));
+    const last = Math.min(this.spec.bins, Math.max(0, Math.round((to - this.spec.min) / this.width)));
     let sum = 0;
-    for (let i = first; i <= last; i++) sum += this.counts[i]!;
+    for (let i = first; i < last; i++) sum += this.counts[i]!;
     return sum;
   }
 

@@ -16,6 +16,7 @@ interface Props {
   logScale: boolean;
   showKnownMasses: boolean;
   entries: number;
+  recorded: number;
   analysis: WindowAnalysis;
   onChannel(channel: Channel): void;
   onCuts(cuts: SelectionCuts): void;
@@ -178,11 +179,12 @@ export function AnalysisPanel(props: Props) {
           disabled={!access.ptCut}
           onChange={(v) => props.onCuts({ ptMinGeV: v })}
         />
-        <p className="note">{t('analysis.resetNote')}</p>
+        <p className="note">{t('analysis.offlineNote', { min: number(definition.ptMinRange[0]) })}</p>
         <Hint textKey="hint.ptCut.what" href={SOURCES.ptCut} />
       </div>
 
       <div className="readout-group">
+        {row(t('analysis.recorded'), number(props.recorded))}
         {row(t('analysis.entries'), number(Math.round(props.entries)))}
         {row(t('analysis.observed'), number(Math.round(analysis.observed)))}
         {row(t('analysis.background'), number(Math.round(analysis.background)))}
