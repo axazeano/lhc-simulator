@@ -1,0 +1,92 @@
+{
+  "circumferenceM": {
+    "value": 26658.883,
+    "unit": "m",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "bendingRadiusM": {
+    "value": 2803.95,
+    "unit": "m",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "dipoleCount": {
+    "value": 1232,
+    "unit": "",
+    "source": "LHC Design Report Vol. 1, Ch. 7, https://cds.cern.ch/record/782076"
+  },
+  "nominalDipoleFieldT": {
+    "value": 8.33,
+    "unit": "T",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "injectionEnergyGeV": {
+    "value": 450,
+    "unit": "GeV",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "nominalEnergyGeV": {
+    "value": 7000,
+    "unit": "GeV",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "revolutionFrequencyHz": {
+    "value": 11245.5,
+    "unit": "Hz",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "rfFrequencyHz": {
+    "value": 400790000,
+    "unit": "Hz",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "harmonicNumber": {
+    "value": 35640,
+    "unit": "",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "maxBunches": {
+    "value": 2808,
+    "unit": "",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "designProtonsPerBunch": {
+    "value": 1.15e11,
+    "unit": "",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "normalizedEmittanceM": {
+    "value": 3.75e-6,
+    "unit": "m·rad",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "designBetaStarM": {
+    "value": 0.55,
+    "unit": "m",
+    "source": "LHC Design Report Vol. 1, Table 2.1, https://cds.cern.ch/record/782076"
+  },
+  "crossingAngleFactor": {
+    "value": 0.836,
+    "unit": "",
+    "source": "LHC Design Report Vol. 1, Sec. 2.2, geometric luminosity reduction factor F for a 285 µrad crossing angle. Simplification: kept constant."
+  },
+  "arcDispersionM": {
+    "value": 2.0,
+    "unit": "m",
+    "source": "LHC Design Report Vol. 1, Ch. 3, peak horizontal dispersion in the arcs is about 2 m. Simplification: a single value for the whole ring."
+  },
+  "apertureHalfWidthM": {
+    "value": 0.017,
+    "unit": "m",
+    "source": "LHC Design Report Vol. 1, Ch. 5, beam screen half-height about 18 mm. Simplification: a single hard aperture with no beam-size margin."
+  },
+  "rampRateGeVPerS": {
+    "value": 5.0,
+    "unit": "GeV/s",
+    "source": "The LHC energy ramp from 450 GeV to 6.5 TeV takes about 20 minutes, https://home.cern/science/accelerators/large-hadron-collider. Simplification: constant rate once the start of the ramp is over."
+  },
+  "maxRelativeRampRatePerS": {
+    "value": 0.003,
+    "unit": "1/s",
+    "source": "The real ramp follows a parabolic-exponential-linear-parabolic (PELP) shape that starts slowly so the magnets and the RF can follow, LHC Design Report Vol. 1, Ch. 6. Simplification: the rate is capped at 0.3 % of the current energy per second."
+  }
+}
