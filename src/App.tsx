@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from './i18n/I18nProvider';
 import { LOCALES, LOCALE_IDS } from './i18n';
 import {
-  LHC_DESIGN_BEAM,
   LHC_MACHINE_CONFIG,
   advance,
   centerOfMassEnergyCollider,
@@ -22,12 +21,15 @@ import {
 import { analyseWindow, type MassWindow } from './physics/analysis/window';
 import { CollisionRun, crossSectionNb, processById } from './physics/collision';
 import type { SelectionCuts } from './physics/detector/detector';
-import { AnalysisPanel, VIEW_PRESETS } from './ui/AnalysisPanel';
+import { evaluateLevel, levelById, type Level, type LevelStatus, type Snapshot } from './tutorial/levels';
+import { loadProgress, saveProgress } from './tutorial/progress';
+import { AnalysisPanel } from './ui/AnalysisPanel';
 import { BeamPanel } from './ui/BeamPanel';
 import { ControlPanel } from './ui/ControlPanel';
 import { HistogramCanvas } from './ui/HistogramCanvas';
 import { Readouts } from './ui/Readouts';
 import { RingCanvas } from './ui/RingCanvas';
+import { TutorialPanel } from './ui/TutorialPanel';
 
 /** Collisions happen whenever a beam is circulating and not being ramped. */
 function isColliding(machine: MachineState): boolean {
@@ -36,14 +38,28 @@ function isColliding(machine: MachineState): boolean {
 
 const COLLECT_INTERVAL_MS = 100;
 
+function machineForLevel(level: Level): MachineState {
+  let m = createMachine();
+  m = setTargetEnergy(m, level.setup.targetEnergyGeV);
+  m = setFieldMode(m, level.setup.fieldMode);
+  if (level.setup.manualFieldT !== undefined) m = setManualField(m, level.setup.manualFieldT);
+  return m;
+}
+
 export function App() {
   const { t, locale, setLocale } = useI18n();
-  const [machine, setMachine] = useState<MachineState>(() => createMachine());
-  const [timeSpeed, setTimeSpeed] = useState(1);
-  const [beam, setBeam] = useState<BeamParameters>(LHC_DESIGN_BEAM);
-  const [cuts, setCuts] = useState<SelectionCuts>({ muonPtMinGeV: 3 });
-  const [view, setView] = useState<MassWindow>(VIEW_PRESETS[0]!.view);
-  const [massWindow, setMassWindow] = useState<MassWindow>(VIEW_PRESETS[0]!.window);
+  const [progress, setProgress] = useState(() => loadProgress());
+  const [level, setLevel] = useState<Level>(() => levelById(loadProgress().currentLevel));
+  const [levelStatus, setLevelStatus] = useState<LevelStatus>('playing');
+  const [quizCorrect, setQuizCorrect] = useState<ReadonlySet<string>>(() => new Set());
+  const [quizWrong, setQuizWrong] = useState<ReadonlySet<string>>(() => new Set());
+
+  const [machine, setMachine] = useState<MachineState>(() => machineForLevel(level));
+  const [timeSpeed, setTimeSpeed] = useState(level.setup.timeSpeed);
+  const [beam, setBeam] = useState<BeamParameters>(level.setup.beam);
+  const [cuts, setCuts] = useState<SelectionCuts>(level.setup.cuts);
+  const [view, setView] = useState<MassWindow>(level.setup.view);
+  const [massWindow, setMassWindow] = useState<MassWindow>(level.setup.window);
   const [logScale, setLogScale] = useState(true);
   const [showKnownMasses, setShowKnownMasses] = useState(false);
   const [runVersion, setRunVersion] = useState(0);
@@ -127,10 +143,81 @@ export function App() {
     setRunVersion((v) => v + 1);
   }, [run]);
 
+  const applyLevel = useCallback(
+    (next: Level) => {
+      const m = machineForLevel(next);
+      machineRef.current = m;
+      setMachine(m);
+      setTimeSpeed(next.setup.timeSpeed);
+      setBeam(next.setup.beam);
+      setCuts(next.setup.cuts);
+      setView(next.setup.view);
+      setMassWindow(next.setup.window);
+      setQuizCorrect(new Set());
+      setQuizWrong(new Set());
+      setLevelStatus('playing');
+      setLevel(next);
+      resetRun();
+      setProgress((p) => {
+        const updated = { ...p, currentLevel: next.id };
+        saveProgress(updated);
+        return updated;
+      });
+    },
+    [resetRun],
+  );
+
+  const levelSnapshot: Snapshot = useMemo(
+    () => ({ machine, beam, luminosityCm2S, colliding, run: snapshot, analysis, window: massWindow, cuts, quizCorrect }),
+    [machine, beam, luminosityCm2S, colliding, snapshot, analysis, massWindow, cuts, quizCorrect],
+  );
+  const evaluation = useMemo(() => evaluateLevel(level, levelSnapshot), [level, levelSnapshot]);
+
+  useEffect(() => {
+    if (levelStatus !== 'playing') return;
+    if (evaluation.failed) {
+      setLevelStatus('failed');
+    } else if (evaluation.completed) {
+      setLevelStatus('completed');
+      setProgress((p) => {
+        if (p.completed.includes(level.id)) return p;
+        const updated = { ...p, completed: [...p.completed, level.id] };
+        saveProgress(updated);
+        return updated;
+      });
+    }
+  }, [evaluation, levelStatus, level.id]);
+
+  const completedSet = useMemo(() => new Set(progress.completed), [progress.completed]);
+
+  const onAnswer = (questionId: string, option: number) => {
+    const question = level.quiz.find((q) => q.id === questionId);
+    if (!question) return;
+    if (option === question.correct) {
+      setQuizCorrect((s) => new Set([...s, questionId]));
+      setQuizWrong((s) => {
+        const next = new Set(s);
+        next.delete(questionId);
+        return next;
+      });
+    } else {
+      setQuizWrong((s) => new Set([...s, questionId]));
+    }
+  };
+
+  const onNext = () => {
+    const ids = ['first-beam', 'ramp', 'why-collider', 'luminosity', 'first-peak', 'z-boson', 'sandbox'];
+    const i = ids.indexOf(level.id);
+    const nextId = ids[i + 1];
+    if (nextId) applyLevel(levelById(nextId));
+  };
+
   const onCuts = (next: SelectionCuts) => {
     setCuts(next);
     resetRun();
   };
+
+  const { access, visible } = level;
 
   return (
     <div className="app">
@@ -151,6 +238,19 @@ export function App() {
         </label>
       </header>
 
+      <TutorialPanel
+        level={level}
+        completed={completedSet}
+        status={levelStatus}
+        evaluation={evaluation}
+        quizCorrect={quizCorrect}
+        quizWrong={quizWrong}
+        onSelectLevel={(id) => applyLevel(levelById(id))}
+        onAnswer={onAnswer}
+        onRestart={() => applyLevel(level)}
+        onNext={onNext}
+      />
+
       <main className="layout">
         <div className="ring-wrap">
           <RingCanvas machine={machine} energyFraction={energyFraction} />
@@ -158,6 +258,7 @@ export function App() {
         <ControlPanel
           machine={machine}
           timeSpeed={timeSpeed}
+          access={access}
           onInject={() => update((s) => inject(s))}
           onDump={() => update((s) => dump(s))}
           onTargetEnergy={(e) => update((s) => setTargetEnergy(s, e))}
@@ -165,44 +266,52 @@ export function App() {
           onManualField={(b) => update((s) => setManualField(s, b))}
           onTimeSpeed={setTimeSpeed}
         />
-        <Readouts machine={machine} />
-        <BeamPanel
-          beam={beam}
-          colliding={colliding}
-          luminosityCm2S={luminosityCm2S}
-          integratedLuminosityM2={snapshot.integratedLuminosityM2}
-          collisionRatePerS={colliding ? collisionRatePerS : null}
-          collisions={snapshot.collisions}
-          onBeam={setBeam}
-        />
-        <div className="histogram-panel panel">
-          <HistogramCanvas
-            histogram={run.histogram}
-            version={runVersion}
-            view={view}
+        {visible.readouts && <Readouts machine={machine} />}
+        {visible.beam && (
+          <BeamPanel
+            beam={beam}
+            colliding={colliding}
+            luminosityCm2S={luminosityCm2S}
+            integratedLuminosityM2={snapshot.integratedLuminosityM2}
+            collisionRatePerS={colliding ? collisionRatePerS : null}
+            collisions={snapshot.collisions}
+            locked={!access.beam}
+            onBeam={setBeam}
+          />
+        )}
+        {visible.histogram && (
+          <div className="histogram-panel panel">
+            <HistogramCanvas
+              histogram={run.histogram}
+              version={runVersion}
+              view={view}
+              window={massWindow}
+              logScale={logScale}
+              showKnownMasses={showKnownMasses}
+            />
+          </div>
+        )}
+        {visible.histogram && (
+          <AnalysisPanel
+            access={access}
+            cuts={cuts}
             window={massWindow}
+            view={view}
             logScale={logScale}
             showKnownMasses={showKnownMasses}
+            entries={snapshot.entries}
+            analysis={analysis}
+            onCuts={onCuts}
+            onWindow={setMassWindow}
+            onView={(nextView, nextWindow) => {
+              setView(nextView);
+              if (nextWindow) setMassWindow(nextWindow);
+            }}
+            onLogScale={setLogScale}
+            onShowKnownMasses={setShowKnownMasses}
+            onReset={resetRun}
           />
-        </div>
-        <AnalysisPanel
-          cuts={cuts}
-          window={massWindow}
-          view={view}
-          logScale={logScale}
-          showKnownMasses={showKnownMasses}
-          entries={snapshot.entries}
-          analysis={analysis}
-          onCuts={onCuts}
-          onWindow={setMassWindow}
-          onView={(nextView, nextWindow) => {
-            setView(nextView);
-            if (nextWindow) setMassWindow(nextWindow);
-          }}
-          onLogScale={setLogScale}
-          onShowKnownMasses={setShowKnownMasses}
-          onReset={resetRun}
-        />
+        )}
       </main>
 
       <footer className="app-footer">{t('footer.sources')}</footer>

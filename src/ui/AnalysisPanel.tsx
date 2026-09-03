@@ -2,8 +2,10 @@ import { useI18n } from '../i18n/I18nProvider';
 import type { WindowAnalysis, MassWindow } from '../physics/analysis/window';
 import type { SelectionCuts } from '../physics/detector/detector';
 import { Hint } from './Hint';
+import type { LevelAccess } from '../tutorial/levels';
 
 interface Props {
+  access: Pick<LevelAccess, 'ptCut' | 'massWindow'>;
   cuts: SelectionCuts;
   window: MassWindow;
   view: MassWindow;
@@ -34,7 +36,8 @@ const SOURCES = {
 
 export function AnalysisPanel(props: Props) {
   const { t, number } = useI18n();
-  const { analysis } = props;
+  const { analysis, access } = props;
+  const lockTitle = t('tutorial.lockedKnob');
 
   const row = (label: string, value: string, className = '') => (
     <div className={`readout ${className}`}>
@@ -80,7 +83,7 @@ export function AnalysisPanel(props: Props) {
         </label>
       </div>
 
-      <div className="knob">
+      <div className={`knob ${access.massWindow ? '' : 'locked'}`} title={access.massWindow ? undefined : lockTitle}>
         <div className="knob-head">
           <span>{t('analysis.window')}</span>
           <span className="window-inputs">
@@ -92,6 +95,7 @@ export function AnalysisPanel(props: Props) {
                 min={2}
                 max={200}
                 value={props.window.minGeV}
+                disabled={!access.massWindow}
                 onChange={(e) => props.onWindow({ ...props.window, minGeV: Number(e.target.value) })}
               />
             </label>
@@ -103,6 +107,7 @@ export function AnalysisPanel(props: Props) {
                 min={2}
                 max={200}
                 value={props.window.maxGeV}
+                disabled={!access.massWindow}
                 onChange={(e) => props.onWindow({ ...props.window, maxGeV: Number(e.target.value) })}
               />
             </label>
@@ -111,7 +116,7 @@ export function AnalysisPanel(props: Props) {
         <Hint textKey="hint.window.what" href={SOURCES.window} />
       </div>
 
-      <div className="knob">
+      <div className={`knob ${access.ptCut ? '' : 'locked'}`} title={access.ptCut ? undefined : lockTitle}>
         <div className="knob-head">
           <label htmlFor="pt-cut">{t('analysis.ptCut')}</label>
           <output htmlFor="pt-cut" className="mono">
@@ -125,6 +130,7 @@ export function AnalysisPanel(props: Props) {
           max={50}
           step={1}
           value={props.cuts.muonPtMinGeV}
+          disabled={!access.ptCut}
           onChange={(e) => props.onCuts({ muonPtMinGeV: Number(e.target.value) })}
         />
         <p className="note">{t('analysis.resetNote')}</p>

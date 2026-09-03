@@ -479,3 +479,240 @@ select {
   font-size: 13px;
   padding: 5px 9px;
 }
+
+/* Stage 2: tutorial */
+.tutorial {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 860px) {
+  .tutorial {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.level-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media (max-width: 860px) {
+  .level-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+.level-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.level-chip:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: transparent;
+}
+
+.level-chip.current {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.level-chip:disabled {
+  opacity: 0.4;
+}
+
+.level-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  flex: none;
+}
+
+.level-chip.current .level-num {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.level-chip.done .level-num {
+  background: var(--ok);
+  color: #fff;
+}
+
+.level-name {
+  flex: 1 1 auto;
+}
+
+.level-done {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.tutorial-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 72ch;
+}
+
+.level-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.level-intro {
+  margin: 0;
+}
+
+.level-goal {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 10px 14px;
+}
+
+.level-goal p {
+  margin: 4px 0 0;
+  font-weight: 500;
+}
+
+.conditions {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.conditions li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.conditions li.done {
+  color: var(--ok);
+}
+
+.cond-mark {
+  width: 16px;
+  flex: none;
+  font-family: var(--font-mono);
+}
+
+.cond-label {
+  flex: 1 1 auto;
+}
+
+.cond-progress {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.quiz {
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+}
+
+.quiz.correct {
+  border-color: var(--ok);
+}
+
+.quiz-question {
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+
+.quiz-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quiz-options button.active {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.quiz-feedback {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+}
+
+.quiz-feedback.ok {
+  color: var(--ok);
+}
+
+.quiz-feedback.warn {
+  color: var(--warn);
+}
+
+.level-hint summary {
+  width: auto;
+  height: auto;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+}
+
+.level-hint p {
+  max-width: 68ch;
+}
+
+.level-status {
+  padding: 12px 14px;
+  border-left: 3px solid var(--line);
+  background: var(--surface-2);
+}
+
+.level-status p {
+  margin: 0 0 8px;
+}
+
+.level-status.failed {
+  border-left-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.level-status.completed {
+  border-left-color: var(--ok);
+}
+
+.level-status-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--ok);
+}
+
+.knob.locked {
+  opacity: 0.5;
+}
+
+.knob.locked input,
+.knob.locked select,
+.knob.locked button {
+  cursor: not-allowed;
+}

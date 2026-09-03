@@ -1,11 +1,13 @@
 import { useI18n } from '../i18n/I18nProvider';
 import { LHC_MACHINE_CONFIG, type FieldMode, type MachineState } from '../physics/accelerator';
+import type { LevelAccess } from '../tutorial/levels';
 import { Hint } from './Hint';
 import { TIME_SPEED_OPTIONS } from './timeSpeed';
 
 interface Props {
   machine: MachineState;
   timeSpeed: number;
+  access: LevelAccess;
   onInject(): void;
   onDump(): void;
   onTargetEnergy(energyGeV: number): void;
@@ -22,9 +24,10 @@ const SOURCES = {
 
 export function ControlPanel(props: Props) {
   const { t, number } = useI18n();
-  const { machine, timeSpeed } = props;
+  const { machine, timeSpeed, access } = props;
   const config = LHC_MACHINE_CONFIG;
   const beamPresent = machine.status !== 'empty';
+  const lockTitle = t('tutorial.lockedKnob');
 
   return (
     <section className="panel controls" aria-labelledby="controls-title">
@@ -39,7 +42,7 @@ export function ControlPanel(props: Props) {
         </button>
       </div>
 
-      <div className="knob">
+      <div className={`knob ${access.energy ? '' : 'locked'}`} title={access.energy ? undefined : lockTitle}>
         <div className="knob-head">
           <label htmlFor="target-energy">{t('controls.targetEnergy')}</label>
           <output htmlFor="target-energy" className="mono">
@@ -54,12 +57,13 @@ export function ControlPanel(props: Props) {
           max={config.maxEnergyGeV}
           step={10}
           value={machine.targetEnergyGeV}
+          disabled={!access.energy}
           onChange={(e) => props.onTargetEnergy(Number(e.target.value))}
         />
         <Hint textKey="hint.energy.what" href={SOURCES.energy} />
       </div>
 
-      <div className="knob">
+      <div className={`knob ${access.fieldMode || access.manualField ? '' : 'locked'}`} title={access.fieldMode || access.manualField ? undefined : lockTitle}>
         <div className="knob-head">
           <span id="field-mode-label">{t('controls.fieldMode')}</span>
           <div className="segmented" role="radiogroup" aria-labelledby="field-mode-label">
@@ -70,6 +74,7 @@ export function ControlPanel(props: Props) {
                 role="radio"
                 aria-checked={machine.fieldMode === mode}
                 className={machine.fieldMode === mode ? 'active' : ''}
+                disabled={!access.fieldMode}
                 onClick={() => props.onFieldMode(mode)}
               >
                 {t(`controls.fieldMode.${mode}`)}
@@ -90,17 +95,17 @@ export function ControlPanel(props: Props) {
           max={config.maxFieldT}
           step={0.005}
           value={machine.fieldMode === 'manual' ? machine.manualFieldT : machine.fieldT}
-          disabled={machine.fieldMode === 'auto'}
+          disabled={machine.fieldMode === 'auto' || !access.manualField}
           onChange={(e) => props.onManualField(Number(e.target.value))}
         />
         <Hint textKey="hint.field.what" href={SOURCES.field} />
       </div>
 
-      <div className="knob">
+      <div className={`knob ${access.timeSpeed ? '' : 'locked'}`} title={access.timeSpeed ? undefined : lockTitle}>
         <div className="knob-head">
           <label htmlFor="time-speed">{t('controls.timeSpeed')}</label>
         </div>
-        <select id="time-speed" value={timeSpeed} onChange={(e) => props.onTimeSpeed(Number(e.target.value))}>
+        <select id="time-speed" value={timeSpeed} disabled={!access.timeSpeed} onChange={(e) => props.onTimeSpeed(Number(e.target.value))}>
           {TIME_SPEED_OPTIONS.map((option) => (
             <option key={option.factor} value={option.factor}>
               {t(option.labelKey)}

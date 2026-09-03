@@ -11,6 +11,7 @@ interface Props {
   integratedLuminosityM2: number;
   collisionRatePerS: number | null;
   collisions: number;
+  locked: boolean;
   onBeam(beam: BeamParameters): void;
 }
 
@@ -22,8 +23,10 @@ const SOURCES = {
 
 export function BeamPanel(props: Props) {
   const { t, number, scientific } = useI18n();
-  const { beam } = props;
+  const { beam, locked } = props;
   const integrated = integratedLuminosityDisplay(props.integratedLuminosityM2);
+  const knobClass = `knob ${locked ? 'locked' : ''}`;
+  const lockTitle = locked ? t('tutorial.lockedKnob') : undefined;
 
   const row = (label: string, value: string) => (
     <div className="readout">
@@ -39,7 +42,7 @@ export function BeamPanel(props: Props) {
         {props.colliding ? t('beam.colliding') : t('beam.notColliding')}
       </p>
 
-      <div className="knob">
+      <div className={knobClass} title={lockTitle}>
         <div className="knob-head">
           <label htmlFor="bunches">{t('beam.bunches')}</label>
           <output htmlFor="bunches" className="mono">{number(beam.bunches)}</output>
@@ -47,6 +50,7 @@ export function BeamPanel(props: Props) {
         <input
           id="bunches"
           type="range"
+          disabled={locked}
           min={1}
           max={LHC.maxBunches}
           step={1}
@@ -56,7 +60,7 @@ export function BeamPanel(props: Props) {
         <Hint textKey="hint.bunches.what" href={SOURCES.bunches} />
       </div>
 
-      <div className="knob">
+      <div className={knobClass} title={lockTitle}>
         <div className="knob-head">
           <label htmlFor="protons">{t('beam.protonsPerBunch')}</label>
           <output htmlFor="protons" className="mono">{scientific(beam.protonsPerBunch, 2)}</output>
@@ -64,6 +68,7 @@ export function BeamPanel(props: Props) {
         <input
           id="protons"
           type="range"
+          disabled={locked}
           min={1e10}
           max={1.5e11}
           step={1e9}
@@ -73,7 +78,7 @@ export function BeamPanel(props: Props) {
         <Hint textKey="hint.protons.what" href={SOURCES.protons} />
       </div>
 
-      <div className="knob">
+      <div className={knobClass} title={lockTitle}>
         <div className="knob-head">
           <label htmlFor="beta-star">{t('beam.betaStar')}</label>
           <output htmlFor="beta-star" className="mono">
@@ -83,6 +88,7 @@ export function BeamPanel(props: Props) {
         <input
           id="beta-star"
           type="range"
+          disabled={locked}
           min={0.25}
           max={10}
           step={0.05}

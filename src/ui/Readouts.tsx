@@ -1,6 +1,6 @@
 import { useI18n } from '../i18n/I18nProvider';
 import { LHC } from '../data/lhc';
-import { LHC_MACHINE_CONFIG, readouts, type MachineState } from '../physics/accelerator';
+import { LHC_MACHINE_CONFIG, readouts, requiredFieldT, type MachineState } from '../physics/accelerator';
 import { Hint } from './Hint';
 import { humanDuration } from './timeSpeed';
 
@@ -14,6 +14,8 @@ export function Readouts({ machine }: Props) {
   const { t, number, plural, scientific } = useI18n();
   const r = readouts(machine);
   const duration = humanDuration(machine.beamTimeS);
+  // Before injection, show what the injection energy will need so the field can be set in advance.
+  const requiredField = r ? r.requiredFieldT : requiredFieldT(LHC_MACHINE_CONFIG.injectionEnergyGeV, LHC_MACHINE_CONFIG);
   const mismatchClass =
     r === null ? '' : Math.abs(r.orbitOffsetM) > LHC_MACHINE_CONFIG.apertureHalfWidthM ? 'bad' : Math.abs(r.fieldMismatch) > 0.003 ? 'warn' : 'ok';
 
@@ -40,8 +42,8 @@ export function Readouts({ machine }: Props) {
       </div>
 
       <div className="readout-group">
-        {row(t('readout.requiredField'), r ? `${number(r.requiredFieldT, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${t('unit.T')}` : dash)}
-        {row(t('readout.actualField'), r ? `${number(r.fieldT, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${t('unit.T')}` : dash)}
+        {row(t('readout.requiredField'), `${number(requiredField, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${t('unit.T')}`)}
+        {row(t('readout.actualField'), `${number(machine.fieldT, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${t('unit.T')}`)}
         {row(
           t('readout.mismatch'),
           r ? `${number(r.fieldMismatch * 100, { minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'always' })} ${t('unit.percent')}` : dash,
